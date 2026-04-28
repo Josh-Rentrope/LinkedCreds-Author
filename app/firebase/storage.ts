@@ -153,17 +153,10 @@ export const getAccessToken = async (fileId: string, forceRefresh: boolean = fal
 const refreshAccessToken = async (tokens: any) => {
   try {
 
-    const response = await fetch('https://oauth2.googleapis.com/token', {
+    const response = await fetch('/api/google-token-refresh', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: new URLSearchParams({
-        client_id: process.env.GOOGLE_CLIENT_ID || '',
-        client_secret: process.env.GOOGLE_CLIENT_SECRET || '',
-        refresh_token: tokens.refreshToken,
-        grant_type: 'refresh_token'
-      })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: tokens.refreshToken })
     })
 
     const data = await response.json()
