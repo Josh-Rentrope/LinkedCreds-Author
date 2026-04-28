@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
   images: {
     domains: ['drive.google.com', 'res.cloudinary.com', 'live.linkedtrust.us'],
     remotePatterns: [
@@ -16,7 +17,7 @@ const nextConfig = {
       ...config.resolve.fallback,
       'rdf-canonize-native': false
     }
-    
+
     return config
   }
 }

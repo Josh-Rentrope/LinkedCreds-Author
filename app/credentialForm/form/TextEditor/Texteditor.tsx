@@ -11,7 +11,7 @@ interface TextEditorProps {
   value: any
   onChange: (value: any) => void
 }
-const Clipboard = Quill.import('modules/clipboard')
+const Clipboard = Quill.import('modules/clipboard') as new (...args: any[]) => any
 
 class PlainClipboard extends Clipboard {
   quill: any
