@@ -49,3 +49,6 @@ next-env.d.ts
 /test-results/
 
 ecosystem.config.js
+backend/venv
+venv
+*.pyc
