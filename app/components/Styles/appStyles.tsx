@@ -825,6 +825,28 @@ export const addSkillButtonStyles = {
   }
 }
 
+export const suggestedSkillPillStyles = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  padding: '6px 12px',
+  maxWidth: 'fit-content',
+  borderRadius: '8px',
+  fontFamily: 'Inter',
+  fontWeight: 500,
+  fontSize: '13px',
+  lineHeight: '16px',
+  gap: '8px',
+  backgroundColor: '#EFF6FF',
+  color: '#2563EB',
+  border: '1px dashed #93C5FD',
+  cursor: 'pointer',
+  transition: 'all 0.2s',
+  '&:hover': {
+    backgroundColor: '#DBEAFE',
+    borderColor: '#3B82F6'
+  }
+}
+
 export const removedSkillPillStyles = {
   background: '#fefefeff',
   color: '#666666',
