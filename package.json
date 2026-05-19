@@ -1,6 +1,6 @@
 {
-  "name": "nextjs",
-  "version": "0.1.1",
+  "name": "linkedcreds",
+  "version": "0.1.2",
   "private": true,
   "scripts": {
     "dev": "next dev",
