@@ -92,6 +92,33 @@ export interface CredentialDisplayProps {
   onCopy: () => void
 }
 
+// ---------------------------------------------------------------------------
+// OCR result types (local Tesseract.js, client-side only)
+// ---------------------------------------------------------------------------
+
+export interface OcrWordLocation {
+  text: string
+  bbox: { x0: number; y0: number; x1: number; y1: number }
+  confidence: number
+}
+
+export interface PageOcrResult {
+  page: number
+  text: string
+  words: OcrWordLocation[]
+}
+
+export type OcrStatus = 'pending' | 'processing' | 'completed' | 'failed'
+
+export interface OcrResult {
+  status: OcrStatus
+  fullText: string
+  pages: PageOcrResult[]
+  error?: string
+}
+
+// ---------------------------------------------------------------------------
+
 export interface FileItem {
   id: string
   file: File
@@ -102,4 +129,5 @@ export interface FileItem {
   fileExtension: string
   googleId?: string
   wasId?: string
+  ocrResult?: OcrResult
 }
