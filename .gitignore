@@ -47,3 +47,6 @@ next-env.d.ts
 /playwright/.auth/
 /playwright/.cache/
 /test-results/
+backend/venv
+venv
+*.pyc

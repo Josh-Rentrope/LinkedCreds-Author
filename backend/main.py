@@ -38,7 +38,15 @@ def extract_skills(request: TextRequest):
     for s in result["results"].get("ngram_scored", []):
         skills.add(s["doc_node_value"])
 
-    return {"skills": list(skills)}
+    extracted_skills_with_source = [
+        {
+            "name": skill,
+            "source": "skillner"
+        } 
+        for skill in skills
+    ]
+    #return {"skills": list(skills)}
+    return {"extracted_skills": extracted_skills_with_source}
 
 
 # Run the app using these commands:
