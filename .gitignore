@@ -52,3 +52,5 @@ ecosystem.config.js
 backend/venv
 venv
 *.pyc
+
+ecosystem.config.js
