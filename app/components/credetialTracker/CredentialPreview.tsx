@@ -29,6 +29,7 @@ import {
   manualSkillInputStyles,
   addSkillButtonStyles,
   removedSkillPillStyles,
+  suggestedSkillPillStyles,
   sidebarHeaderStyles,
   evidenceTipBoxStyles,
   evidenceTipBoxTextStyles
@@ -173,6 +174,10 @@ const CredentialPreview: React.FC<CredentialPreviewProps> = ({
 
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false)
 
+  // Suggested skills: track which have been accepted + expand toggle
+  const [acceptedSuggestedSkills, setAcceptedSuggestedSkills] = useState<Set<string>>(new Set())
+  const [isSuggestedExpanded, setIsSuggestedExpanded] = useState(false)
+
   // Warmup the LLM as soon as the preview component mounts
   useEffect(() => {
     warmupSkillsApi()
@@ -220,6 +225,82 @@ const CredentialPreview: React.FC<CredentialPreviewProps> = ({
       return { ...l, hasId: !!isFile?.googleId || !!isFile?.wasId }
     })
   }, [selectedFiles, formData?.evidence])
+
+  // Derive suggested skills from the /search response (frameworkMatch arrays on detectedSkills)
+  interface SuggestedSkill {
+    name: string
+    similarityScore: number
+    sourceSkillName: string
+  }
+
+  const suggestedSkills = useMemo<SuggestedSkill[]>(() => {
+    if (!detectedSkills.length) return []
+
+    const allSelected = new Set(selectedSkills.map(s => s.name.toLowerCase()))
+    const allRemoved = new Set(removedSkills.map(s => s.name.toLowerCase()))
+    const seen = new Set<string>()
+    const results: SuggestedSkill[] = []
+
+    for (const skill of detectedSkills) {
+      for (const match of skill.frameworkMatch) {
+        const name = match.name.trim()
+        if (!name) continue
+        const lower = name.toLowerCase()
+        if (
+          seen.has(lower) ||
+          allSelected.has(lower) ||
+          allRemoved.has(lower) ||
+          acceptedSuggestedSkills.has(lower)
+        )
+          continue
+        seen.add(lower)
+        results.push({
+          name,
+          similarityScore: match.similarityScore,
+          sourceSkillName: skill.name
+        })
+      }
+    }
+
+    return results.sort((a, b) => b.similarityScore - a.similarityScore)
+  }, [detectedSkills, selectedSkills, removedSkills, acceptedSuggestedSkills])
+
+  const handleAddSuggestedSkill = (skillName: string) => {
+    const trimmed = skillName.trim()
+    if (
+      selectedSkills.some(s => s.name.toLowerCase() === trimmed.toLowerCase())
+    )
+      return
+
+    // Add to detectedSkillNames → triggers the /search pipeline → gets into selectedSkills
+    setDetectedSkillNames(prev => {
+      if (prev.some(n => n.toLowerCase() === trimmed.toLowerCase())) return prev
+      return [...prev, trimmed]
+    })
+
+    // Track as manually added so sync logic works
+    setManuallyAddedSkills(prev => {
+      if (prev.some(s => s.name.toLowerCase() === trimmed.toLowerCase())) return prev
+      return [...prev, {
+        id: trimmed,
+        name: trimmed.toLowerCase(),
+        source: 'user',
+        frameworkMatch: []
+      }]
+    })
+
+    // Mark as accepted so it disappears from suggestions
+    setAcceptedSuggestedSkills(prev => {
+      const next = new Set(prev)
+      next.add(trimmed.toLowerCase())
+      return next
+    })
+
+    // Un-remove if it was previously removed
+    setRemovedSkills(prev =>
+      prev.filter(s => s.name.toLowerCase() !== trimmed.toLowerCase())
+    )
+  }
 
   useEffect(() => {
     if (initialRemovedSkills && initialRemovedSkills.length > 0) {
@@ -863,6 +944,59 @@ const CredentialPreview: React.FC<CredentialPreviewProps> = ({
               >
                 Add links or upload files to show evidence of the skills you are claiming.
               </Typography>
+            )}
+          </Box>
+        </>
+      )}
+
+      {/* Suggested Skills — expandable section */}
+      {currentStep == 2 && suggestedSkills.length > 0 && (
+        <>
+          <Divider sx={previewDividerStyles} />
+          <Box>
+            <Box
+              onClick={() => setIsSuggestedExpanded(!isSuggestedExpanded)}
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                cursor: 'pointer',
+                userSelect: 'none'
+              }}
+            >
+              <Typography sx={{ ...sectionLabelStyles, mb: 0 }}>
+                Suggested Skills ({suggestedSkills.length})
+              </Typography>
+              <Typography
+                sx={{
+                  ...sectionLabelStyles,
+                  mb: 0,
+                  fontSize: '16px',
+                  transition: 'transform 0.2s',
+                  transform: isSuggestedExpanded ? 'rotate(90deg)' : 'rotate(0deg)'
+                }}
+              >
+                ›
+              </Typography>
+            </Box>
+            {isSuggestedExpanded && (
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
+                {suggestedSkills.map(skill => (
+                  <Box
+                    key={skill.name}
+                    onClick={() => handleAddSuggestedSkill(skill.name)}
+                    sx={suggestedSkillPillStyles}
+                  >
+                    {skill.name}
+                    <Box
+                      component='span'
+                      sx={{ fontSize: '11px', opacity: 0.7 }}
+                    >
+                      + add
+                    </Box>
+                  </Box>
+                ))}
+              </Box>
             )}
           </Box>
         </>
