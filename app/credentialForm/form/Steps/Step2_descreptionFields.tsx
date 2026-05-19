@@ -129,6 +129,79 @@ export function Step2({
   const [urlErrors, setUrlErrors] = useState<string[]>([])
   const maxFiles = 10
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [ocrInProgress, setOcrInProgress] = useState<Set<string>>(new Set())
+  const ocrAbortRef = useRef<AbortController | null>(null)
+
+  // ── OCR pipeline: process image/PDF files and extract skills ──────────
+  useEffect(() => {
+    const pending = filesNeedingOcr(files)
+    if (pending.length === 0) return
+
+    let cancelled = false
+    const controller = new AbortController()
+    ocrAbortRef.current = controller
+
+    const runOcr = async () => {
+      const allTextParts: string[] = []
+
+      for (const item of pending) {
+        if (controller.signal.aborted || cancelled) break
+
+        setOcrInProgress(prev => new Set(prev).add(item.id))
+
+        const result = await ocrFileItem(item, (prog) => {
+          // progress is captured implicitly; UI shows status per file
+        })
+
+        setFiles(prev =>
+          prev.map(f => (f.id === item.id ? { ...f, ocrResult: result } : f))
+        )
+        setSelectedFiles(prev =>
+          prev.map(f => (f.id === item.id ? { ...f, ocrResult: result } : f))
+        )
+
+        setOcrInProgress(prev => {
+          const next = new Set(prev)
+          next.delete(item.id)
+          return next
+        })
+
+        if (result.status === 'completed' && result.fullText) {
+          allTextParts.push(result.fullText)
+        }
+      }
+
+      // ── Feed combined OCR text into the extract pipeline ───────────────
+      if (allTextParts.length > 0 && setManuallyAddedSkills && !cancelled) {
+        const combinedText = allTextParts.join('\n\n')
+        try {
+          const rawSkills = await extractRawSkillsApi(combinedText, controller.signal)
+          if (rawSkills.length > 0) {
+            const matches = await searchSkillsApi(rawSkills, controller.signal)
+
+            setManuallyAddedSkills(prev => {
+              const existingNames = new Set(prev.map(s => s.name.toLowerCase()))
+              const newMatches = matches.filter(
+                m => !existingNames.has(m.name.toLowerCase())
+              )
+              return [...prev, ...newMatches]
+            })
+          }
+        } catch (err: any) {
+          if (err.name !== 'AbortError') {
+            console.warn('OCR skill extraction failed:', err)
+          }
+        }
+      }
+    }
+
+    runOcr()
+
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [files, setManuallyAddedSkills])
 
   useEffect(() => {
     setFiles([...selectedFiles])
@@ -607,6 +680,59 @@ export function Step2({
                   />
                 </Box>
               )}
+
+              {/* OCR status indicators */}
+              {selectedFiles
+                .filter(f => canOCR(f as any))
+                .map(f => {
+                  const result = (f as FileItem).ocrResult
+                  const isProcessing = ocrInProgress.has(f.id)
+                  const chipColor =
+                    result?.status === 'completed'
+                      ? '#16a34a'
+                      : result?.status === 'failed'
+                        ? '#dc2626'
+                        : '#6B7280'
+
+                  return (
+                    <Box
+                      key={`ocr-${f.id}`}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1,
+                        mt: 1,
+                        pl: 1
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          backgroundColor: chipColor,
+                          flexShrink: 0
+                        }}
+                      />
+                      <Typography
+                        sx={{
+                          fontFamily: 'Inter',
+                          fontSize: '12px',
+                          color: chipColor
+                        }}
+                      >
+                        {f.name}
+                        {isProcessing
+                          ? ': extracting text...'
+                          : result?.status === 'completed'
+                            ? ': text extracted'
+                            : result?.status === 'failed'
+                              ? ': OCR skipped'
+                              : ': pending OCR'}
+                      </Typography>
+                    </Box>
+                  )
+                })}
             </Box>
           </Box>
         </Box>
