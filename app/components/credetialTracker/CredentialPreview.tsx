@@ -234,7 +234,7 @@ const CredentialPreview: React.FC<CredentialPreviewProps> = ({
   }
 
   const suggestedSkills = useMemo<SuggestedSkill[]>(() => {
-    if (!detectedSkills.length) return []
+    if (!detectedSkills.length && !formData?.extractedOcrSkills?.length) return []
 
     const allSelected = new Set(selectedSkills.map(s => s.name.toLowerCase()))
     const allRemoved = new Set(removedSkills.map(s => s.name.toLowerCase()))
@@ -262,8 +262,29 @@ const CredentialPreview: React.FC<CredentialPreviewProps> = ({
       }
     }
 
+    if (formData?.extractedOcrSkills) {
+      for (const skill of formData.extractedOcrSkills) {
+        const name = skill.name.trim()
+        if (!name) continue
+        const lower = name.toLowerCase()
+        if (
+          seen.has(lower) ||
+          allSelected.has(lower) ||
+          allRemoved.has(lower) ||
+          acceptedSuggestedSkills.has(lower)
+        )
+          continue
+        seen.add(lower)
+        results.push({
+          name,
+          similarityScore: 100, // Put OCR skills near the top
+          sourceSkillName: "Document Upload"
+        })
+      }
+    }
+
     return results.sort((a, b) => b.similarityScore - a.similarityScore)
-  }, [detectedSkills, selectedSkills, removedSkills, acceptedSuggestedSkills])
+  }, [detectedSkills, selectedSkills, removedSkills, acceptedSuggestedSkills, formData?.extractedOcrSkills])
 
   const handleAddSuggestedSkill = (skillName: string) => {
     const trimmed = skillName.trim()
