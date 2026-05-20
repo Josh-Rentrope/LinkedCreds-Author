@@ -76,6 +76,7 @@ export interface FormData {
   skills?: SkillMatch[]
   removedSkills?: SkillMatch[]
   selectedSkills?: SelectedSkill[]
+  extractedOcrSkills?: SkillMatch[]
   [key: string]: string | number | EvidenceItem[] | string[] | SkillMatch[] | SelectedSkill[] | undefined
 }
 

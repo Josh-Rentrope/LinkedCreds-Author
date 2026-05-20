@@ -168,26 +168,55 @@ export function Step2({
 
         if (result.status === 'completed' && result.fullText) {
           allTextParts.push(result.fullText)
+          //console.log(allTextParts);
         }
       }
 
       // ── Feed combined OCR text into the extract pipeline ───────────────
-      if (allTextParts.length > 0 && setManuallyAddedSkills && !cancelled) {
+      //console.log(allTextParts.length > 0 , setManuallyAddedSkills , !cancelled);
+
+      if (allTextParts.length > 0 && setManuallyAddedSkills) {
         const combinedText = allTextParts.join('\n\n')
         try {
+          //console.log("Before Extract Raw Skills API");
           const rawSkills = await extractRawSkillsApi(combinedText, controller.signal)
+          //console.log(rawSkills);
           if (rawSkills.length > 0) {
-            const matches = await searchSkillsApi(rawSkills, controller.signal)
+            // 1. Calculate frequency for each raw skill
+            const skillFrequencies = rawSkills.map(skillName => {
+              // Escape regex characters just in case
+              const escaped = skillName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+              const regex = new RegExp(`\\b${escaped}\\b`, 'gi')
+              const matches = combinedText.match(regex)
+              return { name: skillName, count: matches ? matches.length : 0 }
+            })
+
+            // 2. Sort by frequency descending
+            skillFrequencies.sort((a, b) => b.count - a.count)
+            const sortedSkillNames = skillFrequencies.map(s => s.name)
+            //console.log("sortedSkillNames",sortedSkillNames);
+            // 3. Search ALL skills to get full SkillMatch objects
+            const allMatches = await searchSkillsApi(sortedSkillNames, controller.signal)
+            
+            // Save ALL skills to a separate field (for autocomplete later)
+            setValue('extractedOcrSkills', allMatches)
+
+            // 4. Take top 5 for auto-adding
+            const top5Matches = allMatches.slice(0, 5)
+            console.log("First 5 Skills: ", top5Matches)
 
             setManuallyAddedSkills(prev => {
               const existingNames = new Set(prev.map(s => s.name.toLowerCase()))
-              const newMatches = matches.filter(
+              const newMatches = top5Matches.filter(
                 m => !existingNames.has(m.name.toLowerCase())
               )
+              console.log(prev, newMatches);
+              if (newMatches.length === 0) return prev;
               return [...prev, ...newMatches]
             })
           }
         } catch (err: any) {
+          console.log(err);
           if (err.name !== 'AbortError') {
             console.warn('OCR skill extraction failed:', err)
           }
@@ -198,8 +227,8 @@ export function Step2({
     runOcr()
 
     return () => {
-      cancelled = true
-      controller.abort()
+      //cancelled = true
+      //controller.abort()
     }
   }, [files, setManuallyAddedSkills])
 

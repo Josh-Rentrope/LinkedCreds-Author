@@ -37,11 +37,11 @@ const canOCR = (file: FileItem): boolean => isImage(file) || isPDF(file)
 // Worker lazy-initialisation (singleton)
 // ---------------------------------------------------------------------------
 
+const { createWorker } = await import('tesseract.js')
 let workerPromise: ReturnType<typeof createWorker> | null = null
 
 async function getWorker() {
   if (!workerPromise) {
-    const { createWorker } = await import('tesseract.js')
     workerPromise = createWorker('eng', 1, {
       logger: () => { /* progress logged per-recognize call below */ }
     })
@@ -63,11 +63,11 @@ async function extractFromImage(
 
   try {
     const { data: { text, words: rawWords } } = await worker.recognize(imageUrl, undefined, {
-      logger: (m) => {
-        if (m.status === 'recognizing text' && m.progress != null) {
-          onProgress?.(m.progress)
-        }
-      }
+      // logger: (m) => {
+      //   if (m.status === 'recognizing text' && m.progress != null) {
+      //     onProgress?.(m.progress)
+      //   }
+      // }
     })
 
     const words: OcrWordLocation[] = (rawWords ?? []).map((w: any) => ({
