@@ -304,13 +304,19 @@ const CredentialPreview: React.FC<CredentialPreviewProps> = ({
 
   useEffect(() => {
     if (initialRemovedSkills && initialRemovedSkills.length > 0) {
-      setRemovedSkills(initialRemovedSkills)
+      setRemovedSkills(prev => {
+        if (prev.length === initialRemovedSkills.length && prev.every((p, i) => p.name === initialRemovedSkills[i].name)) return prev;
+        return initialRemovedSkills;
+      })
     }
   }, [initialRemovedSkills])
 
   useEffect(() => {
     if (initialManuallyAddedSkills && initialManuallyAddedSkills.length > 0) {
-      setManuallyAddedSkills(initialManuallyAddedSkills)
+      setManuallyAddedSkills(prev => {
+        if (prev.length === initialManuallyAddedSkills.length && prev.every((p, i) => p.name === initialManuallyAddedSkills[i].name)) return prev;
+        return initialManuallyAddedSkills;
+      })
     }
   }, [initialManuallyAddedSkills])
 
@@ -463,33 +469,49 @@ const CredentialPreview: React.FC<CredentialPreviewProps> = ({
       })
 
       // Keep manual skills + still-detected skills, add newly detected
-      const allDetectedNames = fromDetection.map(s => s.name)
+      const allDetectedNames = fromDetection.map(s => s.name.toLowerCase())
       const stillValid = prev.filter(
         skill =>
-          manuallyAddedSkills.some(m => m.name === skill.name) ||
-          allDetectedNames.includes(skill.name)
+          !removedSkills.some(r => r.name.toLowerCase() === skill.name.toLowerCase()) &&
+          (manuallyAddedSkills.some(m => m.name.toLowerCase() === skill.name.toLowerCase()) ||
+          allDetectedNames.includes(skill.name.toLowerCase()))
       )
       const newDetected = fromDetection.filter(
         skill =>
-          !prev.some(p => p.name === skill.name) &&
-          !removedSkills.some(r => r.name === skill.name)
+          !prev.some(p => p.name.toLowerCase() === skill.name.toLowerCase()) &&
+          !removedSkills.some(r => r.name.toLowerCase() === skill.name.toLowerCase())
       )
-      let next = [...stillValid, ...newDetected]
+      const newManual = manuallyAddedSkills.filter(
+        skill =>
+          !prev.some(p => p.name.toLowerCase() === skill.name.toLowerCase()) &&
+          !removedSkills.some(r => r.name.toLowerCase() === skill.name.toLowerCase())
+      )
+      let next = [...stillValid, ...newDetected, ...newManual]
+
+      // deduplicate by name
+      const seen = new Set<string>()
+      next = next.filter(s => {
+        const lower = s.name.toLowerCase()
+        if (seen.has(lower)) return false
+        seen.add(lower)
+        return true
+      })
 
       // Merge in enriched data for any placeholder pills
       next = next.map(skill => enrichedMap.get(skill.name.toLowerCase()) || skill)
 
       next.sort((a, b) => {
-        const indexA = allDetectedNames.indexOf(a.name)
-        const indexB = allDetectedNames.indexOf(b.name)
+        const indexA = allDetectedNames.indexOf(a.name.toLowerCase())
+        const indexB = allDetectedNames.indexOf(b.name.toLowerCase())
         const weightA = indexA === -1 ? 999 : indexA
         const weightB = indexB === -1 ? 999 : indexB
         return weightA - weightB
       })
 
-      return next
+      const isChanged = next.length !== prev.length || next.some((s, i) => s.name !== prev[i].name)
+      return isChanged ? next : prev
     })
-  }, [detectedSkillNames, detectedSkills, hasFetched, currentStep, manuallyAddedSkills])
+  }, [detectedSkillNames, detectedSkills, hasFetched, currentStep, manuallyAddedSkills, removedSkills])
 
   // Notify parent whenever selected skills change
   useEffect(() => {
@@ -515,17 +537,17 @@ const CredentialPreview: React.FC<CredentialPreviewProps> = ({
   }, [manuallyAddedSkills])
 
   const handleRemoveSkill = (skillToRemove: SkillMatch) => {
-    setSelectedSkills(prev => prev.filter(s => s.name !== skillToRemove.name))
+    setSelectedSkills(prev => prev.filter(s => s.name.toLowerCase() !== skillToRemove.name.toLowerCase()))
 
-    if (!removedSkills.some(s => s.name === skillToRemove.name)) {
+    if (!removedSkills.some(s => s.name.toLowerCase() === skillToRemove.name.toLowerCase())) {
       setRemovedSkills(prev => [...prev, skillToRemove])
     }
   }
 
   const handleRestoreSkill = (skill: SkillMatch) => {
-    if (!selectedSkills.some(s => s.name === skill.name)) {
+    if (!selectedSkills.some(s => s.name.toLowerCase() === skill.name.toLowerCase())) {
       setSelectedSkills(prev => [...prev, skill])
-      setRemovedSkills(prev => prev.filter(s => s.name !== skill.name))
+      setRemovedSkills(prev => prev.filter(s => s.name.toLowerCase() !== skill.name.toLowerCase()))
     }
   }
 
@@ -544,11 +566,14 @@ const CredentialPreview: React.FC<CredentialPreviewProps> = ({
       // Also track as manually added (for sync logic)
       const placeholderSkill: SkillMatch = {
         id: trimmed,
-        name: trimmed.toLowerCase(),
+        name: trimmed,
         source: 'user',
         frameworkMatch: []
       }
-      setManuallyAddedSkills(prev => [...prev, placeholderSkill])
+      setManuallyAddedSkills(prev => {
+        if (prev.some(s => s.name.toLowerCase() === trimmed.toLowerCase())) return prev
+        return [...prev, placeholderSkill]
+      })
       setNewSkillInput('')
 
       // Un-remove if it was previously removed
@@ -1031,6 +1056,8 @@ const CredentialPreview: React.FC<CredentialPreviewProps> = ({
               </Box>
             ))}
           </Box>
+          <hr/>
+          <Button onClick={() => setRemovedSkills([])}> Permanently Remove </Button>
         </Box>
       )}
 

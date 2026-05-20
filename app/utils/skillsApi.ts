@@ -62,6 +62,7 @@ export const extractRawSkillsApi = async (text: string, signal?: AbortSignal): P
             body: JSON.stringify({ text, top_k: 2 }),
             signal
         })
+        console.log(res);
         if (!res.ok) return []
         const data = await res.json()
         const skills: ExtractedSkill[] = data.extracted_skills ?? []
@@ -74,6 +75,7 @@ export const extractRawSkillsApi = async (text: string, signal?: AbortSignal): P
         extractCache.set(text, result)
         return result
     } catch (error: any) {
+        console.log(error);
         if (error.name === 'AbortError') throw error;
         return []
     }
