@@ -1052,6 +1052,16 @@ const CredentialPreview: React.FC<CredentialPreviewProps> = ({
                     </Box>
                   </Box>
                 ))}
+                
+                <Box sx={{ display: 'flex', gap: 0, flexWrap: 'wrap', mt: 0, mb:0 }}> 
+                  <Button onClick={() => {
+                    setAcceptedSuggestedSkills(prev => {
+                      const next = new Set(prev)
+                      suggestedSkills.forEach(skill => next.add(skill.name.toLowerCase()))
+                      return next
+                    })
+                  }}> Remove Suggested Skills </Button>
+                </Box>
               </Box>
             )}
           </Box>
@@ -1087,8 +1097,11 @@ const CredentialPreview: React.FC<CredentialPreviewProps> = ({
               </Box>
             ))}
           </Box>
-          <hr/>
-          <Button onClick={handlePermanentlyRemove}> Permanently Remove </Button>
+          
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 2 }}> 
+            <Button onClick={handlePermanentlyRemove}> Permanently Remove Skills </Button>
+          </Box>
+          
         </Box>
       )}
 
