@@ -551,6 +551,16 @@ const CredentialPreview: React.FC<CredentialPreviewProps> = ({
     }
   }
 
+  const handlePermanentlyRemove = () => {
+    const removedNames = removedSkills.map(s => s.name.toLowerCase())
+    
+    setManuallyAddedSkills(prev => prev.filter(s => !removedNames.includes(s.name.toLowerCase())))
+    setDetectedSkillNames(prev => prev.filter(n => !removedNames.includes(n.toLowerCase())))
+    setDetectedSkills(prev => prev.filter(s => !removedNames.includes(s.name.toLowerCase())))
+    
+    setRemovedSkills([])
+  }
+
   const handleAddManualSkill = () => {
     const trimmed = newSkillInput.trim()
     if (
@@ -1057,7 +1067,7 @@ const CredentialPreview: React.FC<CredentialPreviewProps> = ({
             ))}
           </Box>
           <hr/>
-          <Button onClick={() => setRemovedSkills([])}> Permanently Remove </Button>
+          <Button onClick={handlePermanentlyRemove}> Permanently Remove </Button>
         </Box>
       )}
 
