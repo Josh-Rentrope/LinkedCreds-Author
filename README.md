@@ -40,6 +40,47 @@ Set `NEXT_PUBLIC_GOOGLE_CLIENT_ID` and `NEXT_PUBLIC_GOOGLE_CLIENT_SECRET` in .en
 * Add `http://localhost:3000/api/auth/callback/google` to "Authorized Redirect URIs"
 * Copy the "Client ID" and "Client secret" to the variables in `.env.local`
 
+### Setting Up Firebase Credentials (Local & CI)
+
+To allow both your Next.js application and the Playwright test suite to communicate with Firebase, you need to configure your environment variables.
+
+**Phase 1: Generate Your Firebase Configuration**
+If you do not already have a Firebase app configured, follow these steps starting at [https://console.firebase.google.com/](https://console.firebase.google.com/):
+
+* Create a new project from the project menu, give it a name, and complete the setup wizard.
+* Open the Project Overview dashboard, click "Add app", then click the Web platform icon (`</>`).
+* Enter a web app nickname (e.g., `linked-creds-client-1234`), leave hosting unchecked, and click "Register app".
+* Keep the generated `firebaseConfig` object on your screen (you will need values like `apiKey`, `authDomain`, and `projectId` for the next steps).
+
+**Phase 2: Local Development Setup**
+To run the app or Playwright tests on your local machine:
+
+* Create a file named `.env.local` in the root of your project directory.
+* Copy the following template into the file and populate it with the raw values from your Firebase configuration:
+```env
+NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key_here
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_auth_domain_here
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id_here
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_storage_bucket_here
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id_here
+NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id_here
+
+```
+
+
+* Note: `.env.local` is intentionally ignored by Git to keep your credentials secure. In higher environments, these values can be injected via Cloud Providers, Vaults, or IaC like Terraform.
+
+**Phase 3: GitHub Actions (CI) Setup**
+To allow Playwright to build and test your application in CI, you must securely provide these same variables to GitHub.
+
+* Navigate to your project repository on [https://github.com/](https://github.com/).
+* Open Repository Settings (gear icon) -> Secrets and variables -> Actions.
+* Click the "New repository secret" button to create an entry for each variable.
+* Name the secret exactly as it appears above (e.g., `NEXT_PUBLIC_FIREBASE_API_KEY`) and paste the corresponding raw value, then click "Add secret".
+* Open your project's `.github/workflows/playwright.yml` file.
+* Map the GitHub secrets to job-level environment variables inside the `env:` block so they are securely baked in during the `npm run build` step.
+
+  
 ### Custom Font
 
 This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
