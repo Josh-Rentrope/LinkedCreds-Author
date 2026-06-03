@@ -1,12 +1,35 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Dict, Any, Union
+from typing import List, Dict, Any, Union, Optional
 import uuid
+import sys
+import os
+
 import spacy
 from spacy.matcher import PhraseMatcher
 from skillNer.skill_extractor_class import SkillExtractor
 from skillNer.general_params import SKILL_DB
+
+# ---------------------------------------------------------------------------
+# Allow imports from the skills-extraction/backend module (skill_graph,
+# predict_soc, adjacent_socs, plus the O*NET graph JSON).
+# ---------------------------------------------------------------------------
+_SKILLS_EXTR_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "skills-extraction", "backend",
+)
+if _SKILLS_EXTR_PATH not in sys.path:
+    sys.path.insert(0, _SKILLS_EXTR_PATH)
+
+from skill_graph import (
+    load_graph, get_skills_for_soc, get_soc_title, get_soc_major_group,
+    get_all_soc_codes, get_skill_type,
+)
+import predict_soc
+import adjacent_socs
+
+
 
 app = FastAPI()
 
@@ -30,6 +53,94 @@ class TextRequest(BaseModel):
 class SearchRequest(BaseModel):
     extracted_skills: List[Union[str, Dict[str, Any]]]
     top_k: int = 2
+
+
+class PredictSOCRequest(BaseModel):
+    skills: List[str]
+    top_n: int = 5
+    include_all: bool = False
+    alpha: float = 0.6
+
+
+class AdjacentSOCRequest(BaseModel):
+    soc: str
+    top_n: int = 5
+    skills: Optional[List[str]] = None
+    include_all: bool = False
+
+
+
+
+@app.post("/predict-soc")
+def predict_soc_endpoint(request: PredictSOCRequest):
+    """Predict the most likely SOC codes for a list of skills.
+
+    Accepts a list of skill names, classifies them into hard/soft,
+    and scores candidate SOC codes from the O*NET knowledge graph.
+    """
+    graph = load_graph()
+    idx = {s: s for s in graph["nodes"]["skills"]}
+    hard, soft, nf = predict_soc.classify(request.skills, idx)
+
+    if not hard and not soft:
+        return {"predictions": [], "not_found": nf}
+
+    preds = predict_soc.predict(
+        hard, soft,
+        top_n=request.top_n,
+        include_all=request.include_all,
+        alpha=request.alpha,
+    )
+    return {"predictions": preds, "not_found": nf}
+
+
+@app.post("/adjacent-socs")
+def adjacent_socs_endpoint(request: AdjacentSOCRequest):
+    """Find SOC codes adjacent to a given SOC for upskilling.
+
+    Uses Jaccard similarity over skill overlap to rank adjacent SOCs,
+    split into same-category and cross-category results.
+    """
+    same, cross = adjacent_socs.adjacent(
+        request.soc,
+        top_n=request.top_n,
+        user_skills=request.skills,
+        include_all=request.include_all,
+    )
+    return {"same_category": same, "cross_category": cross}
+
+
+@app.get("/soc/{soc_code}")
+def get_soc_details(soc_code: str):
+    """Return metadata and associated skills for an O*NET SOC code."""
+    title = get_soc_title(soc_code)
+    skills = get_skills_for_soc(soc_code)
+    major_group = get_soc_major_group(soc_code)
+
+    hard_skills = [
+        s for s in skills
+        if get_skill_type(s) in ("technology", "both")
+    ]
+    soft_skills = [
+        s for s in skills
+        if get_skill_type(s) in ("soft", "both")
+    ]
+
+    return {
+        "soc": soc_code,
+        "title": title,
+        "major_group": major_group,
+        "hard_skills": hard_skills,
+        "soft_skills": soft_skills,
+        "total_skills": len(skills),
+    }
+
+
+@app.on_event("startup")
+async def preload_onet_graph():
+    """Pre-load the O*NET graph into memory so the first request is fast."""
+    load_graph()
+
 
 
 # ---------------------------------------------------------------------------
@@ -171,8 +282,14 @@ def search_skills(request: SearchRequest):
 #> venv/bin/pip install -r requirements.txt
 #> venv/bin/python -m spacy download en_core_web_lg
 #> venv/bin/uvicorn main:app --reload --port 8000
-# http://localhost:8000/extract -> responds with skills when we provide text as input.
-# http://localhost:8000/search  -> returns mocked similar-skill alignments.
+# http://localhost:8000/extract       -> responds with skills when we provide text as input.
+# http://localhost:8000/search        -> returns mocked similar-skill alignments.
+# http://localhost:8000/predict-soc   -> predicts SOC codes from a list of skills (O*NET graph)
+# http://localhost:8000/adjacent-socs -> finds SOC codes adjacent to a given SOC
+# http://localhost:8000/soc/{code}    -> returns metadata & skills for a specific SOC code
 # example:
 #> curl localhost:8000/extract --json '{"text":"skills text with python and sql"}'
 #> curl localhost:8000/search --json '{"extracted_skills":[{"name":"python","source":"skillner"}],"top_k":2}'
+#> curl localhost:8000/predict-soc --json '{"skills":["Python","SQL","Machine Learning"],"top_n":3}'
+#> curl localhost:8000/adjacent-socs --json '{"soc":"15-1132.00","top_n":5}'
+#> curl localhost:8000/soc/15-1132.00
