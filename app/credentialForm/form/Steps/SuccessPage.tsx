@@ -33,6 +33,11 @@ import {
 import LoadingOverlay from '../../../components/Loading/LoadingOverlay'
 import { FormData } from '../../../credentialForm/form/types/Types'
 import { copyFormValuesToClipboard } from '../../../utils/formUtils'
+import {
+  getCredentialName,
+  getCredentialDescription,
+  getCredentialPersonName
+} from '../../../utils/claimsHelpers'
 import { useStepContext } from '../StepContext'
 import { useRouter } from 'next/navigation'
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload'
@@ -411,6 +416,20 @@ const SuccessPage: React.FC<SuccessPageProps> = ({
     return `${baseLinkedInUrl}?${params.toString()}`
   }
 
+  const handleViewSourceJson = () => {
+    if (res) {
+      const payload = typeof res === 'string' ? JSON.parse(res) : res
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: 'application/json'
+      })
+      window.open(URL.createObjectURL(blob), '_blank')
+      return
+    }
+    if (fileId) {
+      window.open(`/api/credential-raw/${fileId}`, '_blank')
+    }
+  }
+
   const handleShareOption = (
     option: 'LinkedIn' | 'Email' | 'CopyURL' | 'View' | 'LinkedTrust'
   ) => {
@@ -441,9 +460,9 @@ const SuccessPage: React.FC<SuccessPageProps> = ({
 
   // Data extraction
   const selectedSkills = credentialSubject?.skill ?? []
-  const credentialTitle = claimDetail?.name || credentialSubject?.name || ''
-  const personName = credentialSubject?.person?.name || ''
-  const credentialNarrative = credentialSubject?.description || credentialSubject?.narrative || ''
+  const credentialTitle = claimDetail ? getCredentialName(claimDetail) : ''
+  const personName = claimDetail ? getCredentialPersonName(claimDetail) : ''
+  const credentialNarrative = claimDetail ? getCredentialDescription(claimDetail) : ''
   const evidenceItems =
     claimDetail?.evidence?.map(e => {
       let googleId = undefined
@@ -902,8 +921,8 @@ const SuccessPage: React.FC<SuccessPageProps> = ({
             {/* View Source Button */}
             <Box sx={{ display: 'flex-start', flexDirection: 'column', gap: 1 }}>
               <Button
-                onClick={() => window.open(`/api/credential-raw/${fileId}`, '_blank')}
-                disabled={!fileId}
+                onClick={handleViewSourceJson}
+                disabled={!fileId && !res}
                 variant='contained'
                 startIcon={<DescriptionOutlinedIcon />}
                 endIcon={<OpenInNewIcon />}

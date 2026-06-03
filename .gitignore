@@ -50,3 +50,5 @@ next-env.d.ts
 backend/venv
 venv
 *.pyc
+
+ecosystem.config.js

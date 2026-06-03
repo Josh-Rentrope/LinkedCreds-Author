@@ -35,7 +35,7 @@ import {
   evidenceTipBoxTextStyles
 } from '../Styles/appStyles'
 import { FormData } from '../../credentialForm/form/types/Types'
-import { SkillMatch, extractRawSkillsApi, searchSkillsApi, warmupSkillsApi } from '../../utils/skillsApi'
+import { SkillMatch, extractRawSkillsApi, searchSkillsApi } from '../../utils/skillsApi'
 import Image from 'next/image'
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist'
 import { ensureProtocol } from '../../utils/urlValidation'
@@ -179,9 +179,7 @@ const CredentialPreview: React.FC<CredentialPreviewProps> = ({
   const [isSuggestedExpanded, setIsSuggestedExpanded] = useState(false)
 
   // Warmup the LLM as soon as the preview component mounts
-  useEffect(() => {
-    warmupSkillsApi()
-  }, [])
+
 
   // Combined evidence (files + manual links) for the Supporting Documentation section
   const uniqueLinks = useMemo(() => {

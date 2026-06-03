@@ -23,8 +23,12 @@ import {
   useMediaQuery
 } from '@mui/material'
 import { useSession, signIn } from 'next-auth/react'
+import { warmupSkillsApi } from '../utils/skillsApi'
 import { getFileViaFirebase } from '../firebase/storage'
+import { getCredentialMetadata } from '../utils/credentialMetadata'
 import QRCode from 'qrcode'
+
+type IssuerAccess = 'checking' | 'signin' | 'denied' | 'allowed'
 
 const getDirectGoogleDriveUrl = (url: string): string => {
   try {
@@ -70,9 +74,10 @@ interface RecommendationData {
 }
 
 const Page = () => {
-  const { storage } = useGoogleDrive()
+  const { storage, fetchFileMetadata } = useGoogleDrive()
   const [recommendation, setRecommendation] = useState<RecommendationData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [issuerAccess, setIssuerAccess] = useState<IssuerAccess>('checking')
   const [isApproved, setIsApproved] = useState(false)
   const [isRejected, setIsRejected] = useState(false)
   const [alertState, setAlertState] = useState<AlertState>({
@@ -88,7 +93,7 @@ const Page = () => {
   const [qrCodeDataUrlMobile, setQrCodeDataUrlMobile] = useState<string>('')
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'))
-  const { data: session } = useSession()
+  const { data: session, status: sessionStatus } = useSession()
 
   const SectionTitle = styled(Typography)(({ theme }) => ({
     fontSize: '0.875rem',
@@ -102,6 +107,7 @@ const Page = () => {
   }))
 
   const cleanHTML = (htmlContent: string) => {
+    if (typeof htmlContent !== 'string') return ''
     return htmlContent
       .replace(/<p><br><\/p>/g, '')
       .replace(/<p><\/p>/g, '')
@@ -155,6 +161,54 @@ const Page = () => {
         })
     }
   }, [])
+
+  useEffect(() => {
+    if (!vcId) {
+      setIssuerAccess('denied')
+      setLoading(false)
+      return
+    }
+    if (sessionStatus === 'loading') return
+    if (sessionStatus !== 'authenticated' || !session?.user?.email) {
+      setIssuerAccess('signin')
+      setLoading(false)
+      return
+    }
+
+    let cancelled = false
+    const verifyClaimOwner = async () => {
+      setIssuerAccess('checking')
+      const userEmail = session.user!.email!.toLowerCase()
+
+      try {
+        const meta = await getCredentialMetadata(vcId)
+        if (meta?.owner?.toLowerCase() === userEmail) {
+          if (!cancelled) setIssuerAccess('allowed')
+          return
+        }
+
+        const result = await fetchFileMetadata(vcId)
+        const driveOwner = result.metadata?.owners?.[0]?.emailAddress?.toLowerCase()
+        if (result.success && driveOwner === userEmail) {
+          if (!cancelled) setIssuerAccess('allowed')
+          return
+        }
+      } catch (error) {
+        console.error('Claim owner verification failed:', error)
+      }
+
+      if (!cancelled) {
+        setIssuerAccess('denied')
+        setLoading(false)
+      }
+    }
+
+    verifyClaimOwner()
+    return () => {
+      cancelled = true
+    }
+  }, [vcId, sessionStatus, session, fetchFileMetadata])
+
   useEffect(() => {
     if (typeof window !== 'undefined' && recId) {
       const hiddenRecs = JSON.parse(localStorage.getItem('hiddenRecommendations') ?? '[]')
@@ -185,11 +239,12 @@ const Page = () => {
 
         if (relationsFile) {
           try {
-            const relations = await (storage as any).getRelationsFile(relationsFile.id)
-
-            const alreadyProcessed = relations.some(
-              (relation: any) => relation.recommendationFileId === recId
-            )
+            const relationsContent = await storage.retrieve(relationsFile.id)
+            const relationsData = relationsContent?.data?.body
+              ? JSON.parse(relationsContent.data.body)
+              : relationsContent?.data
+            const alreadyProcessed = Array.isArray(relationsData?.recommendations)
+              && relationsData.recommendations.includes(recId)
 
             if (alreadyProcessed) {
               setIsApproved(true)
@@ -215,21 +270,18 @@ const Page = () => {
       }
     }
 
-    if (recId && vcId) {
+    if (recId && vcId && issuerAccess === 'allowed') {
       checkProcessingStatus()
     }
-  }, [recId, vcId, storage])
+  }, [recId, vcId, storage, issuerAccess])
 
   useEffect(() => {
+    if (!recId || issuerAccess !== 'allowed') return
+
     const fetchRecommendation = async () => {
       setLoading(true)
       try {
-        if (!recId) {
-          console.log('No recommendation file recId')
-          return
-        }
-        // const recommendation = await storage?.retrieve(recId as string)
-        const recommendation = await getFileViaFirebase(recId, session?.accessToken as string)
+        const recommendation = await getFileViaFirebase(recId)
 
         if (!recommendation) {
           console.log('No recommendation file')
@@ -252,7 +304,7 @@ const Page = () => {
       }
     }
     fetchRecommendation()
-  }, [recId, storage])
+  }, [recId, issuerAccess])
 
   const handleUnhide = async () => {
     if (isRejected && recId) {
@@ -295,17 +347,20 @@ const Page = () => {
     setApproveLoading(true)
     try {
       if (!vcId || !storage || !recId) {
-        console.log('No recommendation file id')
         setAlertState({
           open: true,
-          message: 'Error: Missing recommendation file ID',
+          message: 'Please sign in with Google to approve this recommendation.',
           severity: 'error'
         })
         return
       }
+
       const vcFolderId = await storage.getFileParents(vcId)
       const files = await storage.findFolderFiles(vcFolderId)
-      const relationsFile = files.find((f: any) => f.name === 'RELATIONS')
+      let relationsFile = files.find((f: { name?: string }) => f.name === 'RELATIONS')
+      if (!relationsFile) {
+        relationsFile = await storage.createRelationsFile({ vcFolderId })
+      }
 
       await storage.updateRelationsFile({
         relationsFileId: relationsFile.id,
@@ -409,6 +464,78 @@ const Page = () => {
     return initialText
   }
 
+  if (issuerAccess === 'checking' || sessionStatus === 'loading') {
+    return (
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: '100vh'
+        }}
+      >
+        <CircularProgress />
+      </Box>
+    )
+  }
+
+  if (issuerAccess === 'signin') {
+    return (
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: '100vh',
+          gap: 2,
+          px: 4,
+          textAlign: 'center'
+        }}
+      >
+        <Typography variant='h6'>Sign in to review this recommendation</Typography>
+        <Typography variant='body1' color='text.secondary'>
+          Only the credential owner can approve or hide recommendations for their claim.
+        </Typography>
+        <Button
+          variant='contained'
+          color='primary'
+          onClick={() => {
+            warmupSkillsApi()
+            signIn('google')
+          }}
+          sx={{ borderRadius: '100px', textTransform: 'none', px: 4 }}
+        >
+          Sign In with Google
+        </Button>
+      </Box>
+    )
+  }
+
+  if (issuerAccess === 'denied') {
+    return (
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: '100vh',
+          gap: 2,
+          px: 4,
+          textAlign: 'center'
+        }}
+      >
+        <Typography variant='h6' color='error'>
+          Access denied
+        </Typography>
+        <Typography variant='body1' color='text.secondary'>
+          This page is only available to the owner of the skill credential.
+        </Typography>
+      </Box>
+    )
+  }
+
   if ((session as any)?.error === 'RefreshAccessTokenError') {
     return (
       <Box
@@ -432,7 +559,10 @@ const Page = () => {
         <Button
           variant='contained'
           color='primary'
-          onClick={() => signIn('google')}
+          onClick={() => {
+            warmupSkillsApi()
+            signIn('google')
+          }}
           sx={{ borderRadius: '100px', textTransform: 'none', px: 4 }}
         >
           Sign In with Google
@@ -455,6 +585,7 @@ const Page = () => {
       </Box>
     )
   }
+
   return (
     <Box sx={{ p: 3 }}>
       <Typography
