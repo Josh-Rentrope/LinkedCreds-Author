@@ -1,8 +1,17 @@
 #!/usr/bin/env python3
 """predict_soc.py - CLI for SOC code prediction from skills."""
-import argparse, json, sys, os, ast
+import argparse, json, sys, os
 from collections import defaultdict
 from typing import Any, Dict, List, Set, Tuple
+
+import spacy
+from spacy.matcher import PhraseMatcher
+
+from skillNer.skill_extractor_class import SkillExtractor
+from skillNer.general_params import SKILL_DB
+
+nlp = spacy.load("en_core_web_lg")
+skill_extractor = SkillExtractor(nlp, SKILL_DB, PhraseMatcher)
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from skill_graph import (
@@ -10,6 +19,32 @@ from skill_graph import (
     get_skill_type, get_hot_technologies, get_soft_skill_weight,
     get_soc_major_group, get_all_soc_codes,
 )
+
+
+# ── Lazy-loaded SkillNer (used by --text) ──────────────────────────────────
+_nlp = None
+_skill_extractor = None
+
+
+def _get_skill_extractor():
+    """Lazy-load spaCy + SkillNer on first use so --skills mode isn't penalized."""
+    global _nlp, _skill_extractor
+    if _skill_extractor is None:
+        try:
+    
+            import spacy
+            from spacy.matcher import PhraseMatcher
+            from skillNer.skill_extractor_class import SkillExtractor
+            from skillNer.general_params import SKILL_DB
+        except ImportError as e:
+            print(f"Error: SkillNer dependencies not installed. {e}")
+            print("pip install spacy skillNer")
+            sys.exit(1)
+        _nlp = spacy.load("en_core_web_lg")
+        _skill_extractor = SkillExtractor(_nlp, SKILL_DB, PhraseMatcher)
+    return _skill_extractor
+
+
 
 
 def find_skill(name: str, idx: Dict[str, str]) -> str | None:
@@ -87,23 +122,21 @@ def predict(user_hard, user_soft, top_n=5, include_all=False, alpha=0.6):
     return scored[:top_n]
 
 
-def extract_ollama(text):
-    try:
-        from ollama import chat
-    except ImportError:
-        print("Error: ollama not installed. pip install ollama")
-        sys.exit(1)
-    SYS = "Extract ONLY professional skills from text. Output JSON list. No explanations."
-    resp = chat(model="qwen2.5:7b", messages=[
-        {"role": "system", "content": SYS},
-        {"role": "user", "content": text},
-    ])
-    content = resp.message.content.replace("```json","").replace("```","").strip()
-    try:
-        sk = ast.literal_eval(content)
-        return sk if isinstance(sk, list) else []
-    except (ValueError, SyntaxError):
-        return []
+def extract_skillner(text: str) -> list:
+    skills: Set[str] = set()
+    #try:
+    """Extract skill names from free text using SkillNer."""
+    result = skill_extractor.annotate(text)
+    for s in result["results"].get("full_matches", []):
+        skills.add(s["doc_node_value"])
+        
+    for s in result["results"].get("ngram_scored", []):
+        skills.add(s["doc_node_value"])
+
+
+    #except:
+    #    print("Error on extracting via Skillner")
+    return list(skills)
 
 
 def fmt(preds, nf):
@@ -132,7 +165,7 @@ def main():
     p = argparse.ArgumentParser(description="Predict O*NET SOC codes")
     g = p.add_mutually_exclusive_group(required=True)
     g.add_argument("--skills", type=str, help="JSON list of skills")
-    g.add_argument("--text", type=str, help="Free text for Ollama extraction")
+    g.add_argument("--text", type=str, help="Free text for Skill extraction")
     p.add_argument("--top-n", type=int, default=5)
     p.add_argument("--include-all-tech", action="store_true")
     p.add_argument("--alpha", type=float, default=0.6)
@@ -140,8 +173,8 @@ def main():
     args = p.parse_args()
 
     if args.text:
-        print("Extracting via Ollama...")
-        names = extract_ollama(args.text)
+        print("Extracting via Skillner...")
+        names = extract_skillner(args.text)
         print(f"Extracted: {names}")
     else:
         names = json.loads(args.skills)
