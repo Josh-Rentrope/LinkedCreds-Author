@@ -1,0 +1,71 @@
+O*NET Taxonomy Parse Summary
+==================================================
+Total unique skills:     8,876
+  - Technology:          8,841
+  - Soft:                35
+  - Both:                0
+
+Total unique SOC codes:   974
+Total unique Element IDs: 35
+Total unique Commodity codes: 127
+
+Hot technologies:         781
+  Sample: ['20-20 Technologies 20-20 Design', '3D Nature LLC Visual Nature Studio', '3D Nature LLC World Construction Set', '3D Printing software', '3D Systems Geomagic Design X', '3D urban simulation modeling software', '4n6xprt Systems StiffCalcs', 'ACS Technologies HeadMaster', 'ADERANT Expert Back Office, Powered by Keystone', 'ADP Workforce Now']
+
+Skills with SOC codes:      8,876
+Skills with Element IDs:    35
+Skills with Commodity codes:8,841
+Skills with Categories:     0
+Skills with Scale IDs:      35
+
+-- Sample enriched metadata entries --
+
+  [Adobe Systems Adobe Acrobat]
+    soc_codes: [147 items] ['11-1011.00', '11-1021.00', '11-1031.00'] ...
+    element_ids: []
+    scale_ids: []
+    categories: []
+    commodity_codes: ['43232202']
+    hot_technology: True
+    skill_type: technology
+    uuid: urn:uuid:ccc05851-14ff-53ce-9c44-2f77c7bc76ac
+
+  [AdSense Tracker]
+    soc_codes: ['11-1011.00', '11-2021.00']
+    element_ids: []
+    scale_ids: []
+    categories: []
+    commodity_codes: ['43232306']
+    hot_technology: False
+    skill_type: technology
+    uuid: urn:uuid:7b692fd8-22a2-5b0d-947f-f4a7c754229d
+
+  [Atlassian JIRA]
+    soc_codes: [35 items] ['11-1011.00', '11-1021.00', '11-2021.00'] ...
+    element_ids: []
+    scale_ids: []
+    categories: []
+    commodity_codes: ['43231507', '43232201']
+    hot_technology: True
+    skill_type: technology
+    uuid: urn:uuid:3e38c1e1-4b31-5406-9623-0a832a7d07aa
+
+  [Blackbaud The Raiser's Edge]
+    soc_codes: [40 items] ['11-1011.00', '11-1021.00', '11-2021.00'] ...
+    element_ids: []
+    scale_ids: []
+    categories: []
+    commodity_codes: ['43232303']
+    hot_technology: False
+    skill_type: technology
+    uuid: urn:uuid:d5e17913-fd0e-55f4-a47f-7942fc14fba9
+
+  [ComputerEase Construction Accounting]
+    soc_codes: ['11-1011.00']
+    element_ids: []
+    scale_ids: []
+    categories: []
+    commodity_codes: ['43231601']
+    hot_technology: False
+    skill_type: technology
+    uuid: urn:uuid:02793257-5506-5d34-a015-4a9d10d2521a
