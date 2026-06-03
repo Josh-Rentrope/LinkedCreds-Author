@@ -231,8 +231,13 @@ def build_enriched_metadata(
 
 # ── Build graph indexes (reverse lookups) ──────────────────────────────────
 
-def build_graph_indexes(meta: Dict[str, Any]) -> Dict[str, Any]:
-    """From enriched metadata produce nodes + edges suitable for a graph DB."""
+def build_graph_indexes(
+    meta: Dict[str, Any],
+    df_tech: pd.DataFrame,
+    df_skills: pd.DataFrame,
+) -> Dict[str, Any]:
+    """From enriched metadata produce nodes + edges suitable for a graph DB,
+    plus soc_titles and soft_skill_weights."""
     soc_to_skills: Dict[str, List[str]] = defaultdict(list)
     element_to_skills: Dict[str, List[str]] = defaultdict(list)
     commodity_to_skills: Dict[str, List[str]] = defaultdict(list)
@@ -264,6 +269,49 @@ def build_graph_indexes(meta: Dict[str, Any]) -> Dict[str, Any]:
     def _sort(d: Dict[str, List[str]]) -> Dict[str, List[str]]:
         return {k: sorted(v) for k, v in d.items()}
 
+    # ── soc_titles: SOC code → job title ──────────────────────────────
+    soc_titles: Dict[str, str] = {}
+    for _, row in df_tech[["O*NET-SOC Code", "Title"]].iterrows():
+        soc = safe_str(row["O*NET-SOC Code"])
+        title = safe_str(row["Title"])
+        if soc and title:
+            soc_titles[soc] = title
+    for _, row in df_skills[["O*NET-SOC Code", "Title"]].iterrows():
+        soc = safe_str(row["O*NET-SOC Code"])
+        title = safe_str(row["Title"])
+        if soc and soc not in soc_titles:
+            soc_titles[soc] = title
+
+    # ── soft_skill_weights: element_name → [{soc, importance, level}] ─
+    # Use intermediate dict keyed by (name, soc) for O(1) dedup
+    _sw_temp: Dict[tuple, Dict[str, Any]] = {}
+    _not_relevant_col = "Not Relevant" in df_skills.columns
+    for i in range(len(df_skills)):
+        name = normalize_name(df_skills["Element Name"].values[i])
+        if name is None:
+            continue
+        soc = safe_str(df_skills["O*NET-SOC Code"].values[i])
+        if not soc:
+            continue
+        if _not_relevant_col:
+            nr_val = safe_str(df_skills["Not Relevant"].values[i])
+            if nr_val.upper() == "Y":
+                continue
+        scale_id = safe_str(df_skills["Scale ID"].values[i])
+        data_val = df_skills["Data Value"].values[i]
+        val = float(data_val) if not pd.isna(data_val) else 0.0
+        key = (name, soc)
+        if key not in _sw_temp:
+            _sw_temp[key] = {"soc": soc, "importance": 0.0, "level": 0.0}
+        if scale_id == "IM":
+            _sw_temp[key]["importance"] = val
+        elif scale_id == "LV":
+            _sw_temp[key]["level"] = val
+
+    soft_skill_weights: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for (name, soc), entry in _sw_temp.items():
+        soft_skill_weights[name].append(entry)
+
     return {
         "nodes": {
             "skills": {
@@ -292,6 +340,8 @@ def build_graph_indexes(meta: Dict[str, Any]) -> Dict[str, Any]:
                 k: sorted(v) for k, v in skills_by_type.items()
             },
         },
+        "soc_titles": soc_titles,
+        "soft_skill_weights": soft_skill_weights,
     }
 
 
@@ -366,7 +416,7 @@ def main():
 
     # 3. Build graph indexes
     print("\n🔗  Building graph indexes …")
-    graph = build_graph_indexes(meta)
+    graph = build_graph_indexes(meta, df_tech, df_skills)
 
     # 4. Write outputs
     print(f"\n💾  Writing outputs …")
