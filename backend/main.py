@@ -1,16 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-<<<<<<< HEAD
+
 from typing import List, Dict, Any, Union, Optional
 import uuid
 import sys
 import os
 
-=======
-from typing import List, Dict, Any, Union
-import uuid
->>>>>>> d3f60f51 (fix(backend): align /extract response format with frontend + add /search mock endpoint)
 import spacy
 from spacy.matcher import PhraseMatcher
 from skillNer.skill_extractor_class import SkillExtractor
@@ -60,7 +56,7 @@ class SearchRequest(BaseModel):
     top_k: int = 2
 
 
-<<<<<<< HEAD
+
 class PredictSOCRequest(BaseModel):
     skills: List[str]
     top_n: int = 5
@@ -149,8 +145,6 @@ async def preload_onet_graph():
 
 
 
-=======
->>>>>>> d3f60f51 (fix(backend): align /extract response format with frontend + add /search mock endpoint)
 # ---------------------------------------------------------------------------
 # Mock similar-skills lookup table
 # When a real O*NET / FAISS index is not available, this dictionary provides
