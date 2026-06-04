@@ -555,6 +555,19 @@ const Form = ({ onStepChange }: any) => {
           skills={activeSkills.map(s => s.name)}
           socCode={userSelectedSocCode}
           onSocCodeChange={setUserSelectedSocCode}
+          onAddSkill={(skillName: string) => {
+            const placeholderSkill: SkillMatch = {
+              id: skillName,
+              name: skillName,
+              source: 'user',
+              frameworkMatch: [],
+            }
+            setManuallyAddedSkills((prev: SkillMatch[]) => {
+              if (prev.some((s) => s.name.toLowerCase() === skillName.toLowerCase()))
+                return prev
+              return [...prev, placeholderSkill]
+            })
+          }}
         />
       </Box>
 

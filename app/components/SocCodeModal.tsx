@@ -17,11 +17,14 @@ import {
   List,
   ListItem,
   ListItemText,
-  ListItemButton
+  ListItemButton,
+  Collapse,
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import RestartAltIcon from '@mui/icons-material/RestartAlt'
 import SearchIcon from '@mui/icons-material/Search'
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
+import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import {
   predictSocApi,
   adjacentSocsApi,
@@ -35,6 +38,7 @@ interface SocCodeModalProps {
   skills: string[]
   socCode: string | null
   onSocCodeChange: (code: string | null) => void
+  onAddSkill?: (skillName: string) => void
 }
 
 export default function SocCodeModal({
@@ -42,7 +46,8 @@ export default function SocCodeModal({
   onClose,
   skills,
   socCode,
-  onSocCodeChange
+  onSocCodeChange,
+  onAddSkill,
 }: SocCodeModalProps) {
   const [predictions, setPredictions] = useState<SocPrediction[]>([])
   const [adjacentSocs, setAdjacentSocs] = useState<AdjacentSocEntry[]>([])
@@ -57,10 +62,16 @@ export default function SocCodeModal({
     hard: string[]
     soft: string[]
   } | null>(null)
+  const [unmatchedSkills, setUnmatchedSkills] = useState<{
+    hard: string[]
+    soft: string[]
+  } | null>(null)
+  const [unmatchedOpen, setUnmatchedOpen] = useState(false)
 
   const socCacheRef = useRef<Map<string, SocPrediction>>(new Map())
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const socDetailsRef = useRef<{ hard_skills: string[]; soft_skills: string[] } | null>(null)
 
   const addToCache = useCallback((entries: { soc: string; title: string; score: number }[]) => {
     for (const entry of entries) {
@@ -100,6 +111,17 @@ export default function SocCodeModal({
     []
   )
 
+  const computeUnmatched = useCallback(
+    (hardSkills: string[], softSkills: string[]) => {
+      const userSkillsLower = skills.map((s) => s.toLowerCase())
+      return {
+        hard: hardSkills.filter((s) => !userSkillsLower.includes(s.toLowerCase())),
+        soft: softSkills.filter((s) => !userSkillsLower.includes(s.toLowerCase())),
+      }
+    },
+    [skills]
+  )
+
   // Load initial data when modal opens
   useEffect(() => {
     if (!open) return
@@ -109,10 +131,13 @@ export default function SocCodeModal({
     setError(null)
     setPredictions([])
     setSkillMatches(null)
+    setUnmatchedSkills(null)
+    setUnmatchedOpen(false)
     setAdjacentSocs([])
     setCurrentTitle(null)
     setAdjacentLoading(false)
     setSearching(false)
+    socDetailsRef.current = null
 
     loadInitialData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -131,6 +156,22 @@ export default function SocCodeModal({
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
   }, [])
+
+  // Recompute matched/unmatched locally when user skills change
+  useEffect(() => {
+    const details = socDetailsRef.current
+    if (!details) return
+    const userSkillsLower = skills.map((s) => s.toLowerCase())
+    setSkillMatches({
+      hard: details.hard_skills.filter((s) =>
+        userSkillsLower.includes(s.toLowerCase())
+      ),
+      soft: details.soft_skills.filter((s) =>
+        userSkillsLower.includes(s.toLowerCase())
+      ),
+    })
+    setUnmatchedSkills(computeUnmatched(details.hard_skills, details.soft_skills))
+  }, [skills, computeUnmatched])
 
   const loadInitialData = useCallback(async () => {
     setInitialLoading(true)
@@ -160,6 +201,13 @@ export default function SocCodeModal({
               userSkillsLower.includes(s.toLowerCase())
             ),
           })
+          socDetailsRef.current = {
+            hard_skills: detailResult.hard_skills,
+            soft_skills: detailResult.soft_skills,
+          }
+          setUnmatchedSkills(
+            computeUnmatched(detailResult.hard_skills, detailResult.soft_skills)
+          )
         }
       } else if (skills.length > 0) {
         // Auto-detect mode — predict SOC from skills
@@ -175,14 +223,27 @@ export default function SocCodeModal({
             soft: top.soft_matches || [],
           })
 
-          const adjResult = await adjacentSocsApi(top.soc, 5, skills)
+          const [adjResult, details] = await Promise.all([
+            adjacentSocsApi(top.soc, 5, skills),
+            getSocDetailsApi(top.soc),
+          ])
           setAdjacentSocs(adjResult.same_category)
           addToCache(adjResult.same_category)
           addToCache(adjResult.cross_category)
+          if (details) {
+            socDetailsRef.current = {
+              hard_skills: details.hard_skills,
+              soft_skills: details.soft_skills,
+            }
+            setUnmatchedSkills(
+              computeUnmatched(details.hard_skills, details.soft_skills)
+            )
+          }
         } else {
           setCurrentTitle(null)
           setAdjacentSocs([])
           setSkillMatches(null)
+          setUnmatchedSkills(null)
         }
       } else {
         setCurrentTitle(null)
@@ -227,6 +288,13 @@ export default function SocCodeModal({
               userSkillsLower.includes(s.toLowerCase())
             ),
           })
+          socDetailsRef.current = {
+            hard_skills: details.hard_skills,
+            soft_skills: details.soft_skills,
+          }
+          setUnmatchedSkills(
+            computeUnmatched(details.hard_skills, details.soft_skills)
+          )
         }
       } catch (err) {
         console.warn('[SocCodeModal] Failed to fetch adjacent SOCs:', err)
@@ -239,6 +307,9 @@ export default function SocCodeModal({
 
   const handleReset = useCallback(() => {
     onSocCodeChange(null)
+    setUnmatchedSkills(null)
+    setUnmatchedOpen(false)
+    socDetailsRef.current = null
     // Keep search open if it was; reload auto-detect data
     setInitialLoading(true)
     setError(null)
@@ -255,10 +326,22 @@ export default function SocCodeModal({
             hard: top.hard_matches || [],
             soft: top.soft_matches || [],
           })
-          return adjacentSocsApi(top.soc, 5, skills).then((adjResult) => {
+          return Promise.all([
+            adjacentSocsApi(top.soc, 5, skills),
+            getSocDetailsApi(top.soc),
+          ]).then(([adjResult, details]) => {
             setAdjacentSocs(adjResult.same_category)
             addToCache(adjResult.same_category)
             addToCache(adjResult.cross_category)
+            if (details) {
+              socDetailsRef.current = {
+                hard_skills: details.hard_skills,
+                soft_skills: details.soft_skills,
+              }
+              setUnmatchedSkills(
+                computeUnmatched(details.hard_skills, details.soft_skills)
+              )
+            }
           })
         } else {
           setCurrentTitle(null)
@@ -272,7 +355,7 @@ export default function SocCodeModal({
       .finally(() => {
         setInitialLoading(false)
       })
-  }, [skills, onSocCodeChange, addToCache])
+  }, [skills, onSocCodeChange, addToCache, computeUnmatched])
 
   const runSearch = useCallback(
     async (query: string) => {
@@ -294,12 +377,12 @@ export default function SocCodeModal({
           }
         }
 
-        setPredictions(merged)
+        setPredictions(merged.slice(0, 5))
       } catch (err) {
         console.warn('[SocCodeModal] Search failed:', err)
         const fuzzyResults = fuzzyFilterSocs(q, socCacheRef.current)
         if (fuzzyResults.length > 0) {
-          setPredictions(fuzzyResults)
+          setPredictions(fuzzyResults.slice(0, 5))
         }
       } finally {
         setSearching(false)
@@ -588,6 +671,87 @@ export default function SocCodeModal({
                 )}
               </Box>
             )}
+
+            {/* Other Skills in This Code */}
+            {(socCode || predictions.length > 0) && unmatchedSkills &&
+            (unmatchedSkills.hard.length > 0 || unmatchedSkills.soft.length > 0) ? (
+              <Box sx={{ mb: 2 }}>
+                <Button
+                  size='small'
+                  onClick={() => setUnmatchedOpen(!unmatchedOpen)}
+                  endIcon={unmatchedOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                  sx={{ textTransform: 'none', p: 0, mb: 0.5 }}
+                >
+                  <Typography variant='subtitle2' color='text.secondary'>
+                    Other Skills in This Code
+                  </Typography>
+                </Button>
+                <Collapse in={unmatchedOpen}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 1 }}>
+                    {unmatchedSkills.hard.length > 0 && (
+                      <Box>
+                        <Typography
+                          variant='caption'
+                          color='text.secondary'
+                          sx={{ mb: 0.5, display: 'block' }}
+                        >
+                          Hard Skills
+                        </Typography>
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                          {unmatchedSkills.hard.map((skill) => (
+                            <Chip
+                              key={skill}
+                              label={skill}
+                              size='small'
+                              color='success'
+                              variant='outlined'
+                              onClick={
+                                onAddSkill ? () => onAddSkill(skill) : undefined
+                              }
+                              sx={
+                                onAddSkill
+                                  ? { cursor: 'pointer', '&:hover': { backgroundColor: 'action.hover' } }
+                                  : {}
+                              }
+                            />
+                          ))}
+                        </Box>
+                      </Box>
+                    )}
+                    {unmatchedSkills.soft.length > 0 && (
+                      <Box>
+                        <Typography
+                          variant='caption'
+                          color='text.secondary'
+                          sx={{ mb: 0.5, display: 'block' }}
+                        >
+                          Soft Skills
+                        </Typography>
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                          {unmatchedSkills.soft.map((skill) => (
+                            <Chip
+                              key={skill}
+                              label={skill}
+                              size='small'
+                              color='info'
+                              variant='outlined'
+                              onClick={
+                                onAddSkill ? () => onAddSkill(skill) : undefined
+                              }
+                              sx={
+                                onAddSkill
+                                  ? { cursor: 'pointer', '&:hover': { backgroundColor: 'action.hover' } }
+                                  : {}
+                              }
+                            />
+                          ))}
+                        </Box>
+                      </Box>
+                    )}
+                  </Box>
+                </Collapse>
+              </Box>
+            ) : null}
 
             <Divider sx={{ my: 2 }} />
 
