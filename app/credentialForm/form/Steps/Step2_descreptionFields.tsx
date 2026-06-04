@@ -101,6 +101,9 @@ interface Step2Props {
   handleBack: () => void
   setActiveSkills?: React.Dispatch<React.SetStateAction<SkillMatch[]>>
   setManuallyAddedSkills?: React.Dispatch<React.SetStateAction<SkillMatch[]>>
+  socCode?: string | null
+  onSocCodeChange?: (code: string | null) => void
+  onOpenSocCodeModal?: () => void
 }
 
 // Example list of skills for auto-search
@@ -122,7 +125,10 @@ export function Step2({
   setSelectedFiles,
   handleBack,
   setActiveSkills,
-  setManuallyAddedSkills
+  setManuallyAddedSkills,
+  socCode,
+  onSocCodeChange,
+  onOpenSocCodeModal
 }: Readonly<Step2Props>) {
   const { loading, setUploadImageFn } = useStepContext()
   const { storage } = useGoogleDrive()
@@ -637,6 +643,29 @@ export function Step2({
           )}
         />
       </Box>
+
+      {/* SOC Code Classification Button */}
+      {onOpenSocCodeModal && (
+        <Box sx={{ display: 'flex', justifyContent: 'flex-start' }}>
+          <Button
+            variant='outlined'
+            size='small'
+            onClick={onOpenSocCodeModal}
+            sx={{
+              textTransform: 'none',
+              borderRadius: '8px',
+              borderColor: '#2DD4BF',
+              color: '#2DD4BF',
+              '&:hover': {
+                borderColor: '#14b8a6',
+                backgroundColor: 'rgba(45, 212, 191, 0.04)'
+              }
+            }}
+          >
+            {socCode ? `SOC: ${socCode}` : 'Job Classification'}
+          </Button>
+        </Box>
+      )}
 
       {/* Evidence Section */}
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>

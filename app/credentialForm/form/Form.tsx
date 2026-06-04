@@ -29,6 +29,7 @@ import { SkillMatch, warmupSkillsApi } from '../../utils/skillsApi'
 import useGoogleDrive from '../../hooks/useGoogleDrive'
 import { signSkillClaim } from '../../utils/signSkillClaim'
 import CredentialPreview from '../../components/credetialTracker/CredentialPreview'
+import SocCodeModal from '../../components/SocCodeModal'
 
 const Form = ({ onStepChange }: any) => {
   const { activeStep, handleNext, handleBack, setActiveStep, loading, handleSkip } =
@@ -47,6 +48,8 @@ const Form = ({ onStepChange }: any) => {
   const [activeSkills, setActiveSkills] = useState<SkillMatch[]>([])
   const [removedSkills, setRemovedSkills] = useState<SkillMatch[]>([])
   const [manuallyAddedSkills, setManuallyAddedSkills] = useState<SkillMatch[]>([])
+  const [userSelectedSocCode, setUserSelectedSocCode] = useState<string | null>(null)
+  const [socCodeModalOpen, setSocCodeModalOpen] = useState(false)
 
   const { data: session } = useSession()
   const accessToken = session?.accessToken
@@ -169,6 +172,8 @@ const Form = ({ onStepChange }: any) => {
           if (savedSession.removedSkills) setRemovedSkills(savedSession.removedSkills)
           if (savedSession.manuallyAddedSkills)
             setManuallyAddedSkills(savedSession.manuallyAddedSkills)
+          if (savedSession.userSelectedSocCode)
+            setUserSelectedSocCode(savedSession.userSelectedSocCode)
         } catch (error) {
           console.error('Failed to parse auto-saved session:', error)
         }
@@ -183,6 +188,7 @@ const Form = ({ onStepChange }: any) => {
     const currentFormData = watch()
     const autoSaveData = {
       formData: currentFormData,
+      userSelectedSocCode,
       activeSkills,
       removedSkills,
       manuallyAddedSkills,
@@ -467,6 +473,9 @@ const Form = ({ onStepChange }: any) => {
                       handleBack={costumedHandleBackStep}
                       setActiveSkills={setActiveSkills}
                       setManuallyAddedSkills={setManuallyAddedSkills}
+                      socCode={userSelectedSocCode}
+                      onSocCodeChange={setUserSelectedSocCode}
+                      onOpenSocCodeModal={() => setSocCodeModalOpen(true)}
                     />
                   </Box>
                 </Slide>
@@ -539,6 +548,14 @@ const Form = ({ onStepChange }: any) => {
           )}
           {snackMessage ? <SnackMessage message={snackMessage} /> : ''}
         </Box>
+
+        <SocCodeModal
+          open={socCodeModalOpen}
+          onClose={() => setSocCodeModalOpen(false)}
+          skills={activeSkills.map(s => s.name)}
+          socCode={userSelectedSocCode}
+          onSocCodeChange={setUserSelectedSocCode}
+        />
       </Box>
 
       {activeStep >= 1 && activeStep < 3 && (
