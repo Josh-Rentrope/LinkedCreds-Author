@@ -46,12 +46,13 @@ export default function SocCodeModal({
 }: SocCodeModalProps) {
   const [predictions, setPredictions] = useState<SocPrediction[]>([])
   const [adjacentSocs, setAdjacentSocs] = useState<AdjacentSocEntry[]>([])
-  const [loading, setLoading] = useState(false)
+  const [initialLoading, setInitialLoading] = useState(false)
+  const [adjacentLoading, setAdjacentLoading] = useState(false)
+  const [searching, setSearching] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showChangeInput, setShowChangeInput] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [currentTitle, setCurrentTitle] = useState<string | null>(null)
-  const [currentScore, setCurrentScore] = useState<number | null>(null)
   const [skillMatches, setSkillMatches] = useState<{
     hard: string[]
     soft: string[]
@@ -59,6 +60,7 @@ export default function SocCodeModal({
 
   const socCacheRef = useRef<Map<string, SocPrediction>>(new Map())
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
   const addToCache = useCallback((entries: { soc: string; title: string; score: number }[]) => {
     for (const entry of entries) {
@@ -98,7 +100,7 @@ export default function SocCodeModal({
     []
   )
 
-  // Reset internal state and load data when modal opens or socCode/skills change
+  // Load initial data when modal opens
   useEffect(() => {
     if (!open) return
 
@@ -107,12 +109,31 @@ export default function SocCodeModal({
     setError(null)
     setPredictions([])
     setSkillMatches(null)
+    setAdjacentSocs([])
+    setCurrentTitle(null)
+    setAdjacentLoading(false)
+    setSearching(false)
 
     loadInitialData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
+  // Focus search input when it appears
+  useEffect(() => {
+    if (showChangeInput && searchInputRef.current) {
+      searchInputRef.current.focus()
+    }
+  }, [showChangeInput])
+
+  // Cleanup debounce on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [])
+
   const loadInitialData = useCallback(async () => {
-    setLoading(true)
+    setInitialLoading(true)
     setError(null)
 
     try {
@@ -125,14 +146,11 @@ export default function SocCodeModal({
 
         setAdjacentSocs(adjResult.same_category)
         setCurrentTitle(detailResult?.title ?? null)
-        setCurrentScore(null)
 
-        // Populate cache
         addToCache(adjResult.same_category)
         addToCache(adjResult.cross_category)
         if (detailResult) {
           addToCache([{ soc: detailResult.soc, title: detailResult.title, score: 0 }])
-          // Compute skill matches from user skills against SOC skills
           const userSkillsLower = skills.map((s) => s.toLowerCase())
           setSkillMatches({
             hard: detailResult.hard_skills.filter((s) =>
@@ -152,27 +170,22 @@ export default function SocCodeModal({
         if (predResult.predictions.length > 0) {
           const top = predResult.predictions[0]
           setCurrentTitle(top.title)
-          setCurrentScore(top.score)
           setSkillMatches({
             hard: top.hard_matches || [],
             soft: top.soft_matches || [],
           })
 
-          // Also fetch adjacent SOCs for top prediction
           const adjResult = await adjacentSocsApi(top.soc, 5, skills)
           setAdjacentSocs(adjResult.same_category)
           addToCache(adjResult.same_category)
           addToCache(adjResult.cross_category)
         } else {
           setCurrentTitle(null)
-          setCurrentScore(null)
           setAdjacentSocs([])
           setSkillMatches(null)
         }
       } else {
-        // No skills, no selection
         setCurrentTitle(null)
-        setCurrentScore(null)
         setAdjacentSocs([])
         setSkillMatches(null)
       }
@@ -180,23 +193,17 @@ export default function SocCodeModal({
       console.warn('[SocCodeModal] Failed to load SOC data:', err)
       setError('Failed to load SOC data. Please try again.')
     } finally {
-      setLoading(false)
+      setInitialLoading(false)
     }
   }, [socCode, skills, addToCache])
 
   const handleSelectSoc = useCallback(
-    async (code: string, title: string, score?: number) => {
-      // Commit the selection to parent immediately
+    async (code: string, title: string) => {
       setCurrentTitle(title)
-      setCurrentScore(score ?? null)
-      setShowChangeInput(false)
       onSocCodeChange(code)
+      addToCache([{ soc: code, title, score: 0 }])
 
-      // Cache this SOC
-      addToCache([{ soc: code, title, score: score ?? 0 }])
-
-      // Fetch adjacent SOCs + skill matches for newly selected code
-      setLoading(true)
+      setAdjacentLoading(true)
       try {
         const [adjResult, details] = await Promise.all([
           adjacentSocsApi(
@@ -224,7 +231,7 @@ export default function SocCodeModal({
       } catch (err) {
         console.warn('[SocCodeModal] Failed to fetch adjacent SOCs:', err)
       } finally {
-        setLoading(false)
+        setAdjacentLoading(false)
       }
     },
     [skills, onSocCodeChange, addToCache]
@@ -232,20 +239,51 @@ export default function SocCodeModal({
 
   const handleReset = useCallback(() => {
     onSocCodeChange(null)
-    setShowChangeInput(false)
-  }, [onSocCodeChange])
+    // Keep search open if it was; reload auto-detect data
+    setInitialLoading(true)
+    setError(null)
+
+    predictSocApi(skills, 5, 0.6)
+      .then((predResult) => {
+        setPredictions(predResult.predictions)
+        addToCache(predResult.predictions)
+
+        if (predResult.predictions.length > 0) {
+          const top = predResult.predictions[0]
+          setCurrentTitle(top.title)
+          setSkillMatches({
+            hard: top.hard_matches || [],
+            soft: top.soft_matches || [],
+          })
+          return adjacentSocsApi(top.soc, 5, skills).then((adjResult) => {
+            setAdjacentSocs(adjResult.same_category)
+            addToCache(adjResult.same_category)
+            addToCache(adjResult.cross_category)
+          })
+        } else {
+          setCurrentTitle(null)
+          setAdjacentSocs([])
+          setSkillMatches(null)
+        }
+      })
+      .catch((err) => {
+        console.warn('[SocCodeModal] Failed to reload auto-detect:', err)
+      })
+      .finally(() => {
+        setInitialLoading(false)
+      })
+  }, [skills, onSocCodeChange, addToCache])
 
   const runSearch = useCallback(
     async (query: string) => {
       const q = query.trim()
       if (!q) return
 
-      setLoading(true)
+      setSearching(true)
       try {
         const result = await predictSocApi([q], 5, 0.6)
         addToCache(result.predictions)
 
-        // Merge API results with fuzzy cache matches
         const fuzzyResults = fuzzyFilterSocs(q, socCacheRef.current)
         const apiSocs = new Set(result.predictions.map((p) => p.soc))
         const merged = [...result.predictions]
@@ -259,13 +297,16 @@ export default function SocCodeModal({
         setPredictions(merged)
       } catch (err) {
         console.warn('[SocCodeModal] Search failed:', err)
-        // Fall back to fuzzy cache results
         const fuzzyResults = fuzzyFilterSocs(q, socCacheRef.current)
         if (fuzzyResults.length > 0) {
           setPredictions(fuzzyResults)
         }
       } finally {
-        setLoading(false)
+        setSearching(false)
+        // Keep focus on search input
+        if (searchInputRef.current) {
+          searchInputRef.current.focus()
+        }
       }
     },
     [addToCache, fuzzyFilterSocs]
@@ -288,24 +329,33 @@ export default function SocCodeModal({
     [runSearch]
   )
 
-  // Cleanup debounce on unmount
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-    }
-  }, [])
-
   const isCurrentPrediction = (pred: SocPrediction) =>
     socCode !== null && pred.soc === socCode
 
+  const showContent = !initialLoading && !error
+
   return (
-    <Dialog open={open} onClose={onClose} maxWidth='sm' fullWidth>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth={false}
+      PaperProps={{
+        sx: {
+          width: '50vw',
+          minWidth: 420,
+          maxWidth: 960,
+          height: '85vh',
+          maxHeight: '85vh',
+        },
+      }}
+    >
       <DialogTitle
         sx={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          pb: 1
+          pb: 1,
+          flexShrink: 0,
         }}
       >
         <Typography variant='h6' fontWeight={600}>
@@ -316,8 +366,8 @@ export default function SocCodeModal({
         </IconButton>
       </DialogTitle>
 
-      <DialogContent dividers>
-        {loading && (
+      <DialogContent dividers sx={{ overflowY: 'auto', flex: 1 }}>
+        {initialLoading && (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
             <CircularProgress />
           </Box>
@@ -329,7 +379,7 @@ export default function SocCodeModal({
           </Typography>
         )}
 
-        {!loading && !error && (
+        {showContent && (
           <>
             {/* Current SOC Display */}
             <Box sx={{ mb: 3 }}>
@@ -339,37 +389,42 @@ export default function SocCodeModal({
                   : 'Detected Classification'}
               </Typography>
               {socCode || predictions.length > 0 ? (
-                <Box
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 2,
-                    flexWrap: 'wrap'
-                  }}
-                >
-                  <Chip
-                    label={`${socCode || predictions[0]?.soc || ''}${currentTitle ? ` \u2014 ${currentTitle}` : ''}`}
-                    color={socCode ? 'primary' : 'default'}
-                    variant={socCode ? 'filled' : 'outlined'}
-                    onClick={
-                      !socCode && predictions.length > 0
-                        ? () => handleSelectSoc(predictions[0].soc, predictions[0].title, predictions[0].score)
-                        : undefined
-                    }
+                <>
+                  <Box
                     sx={{
-                      fontWeight: 600,
-                      fontSize: '0.9rem',
-                      py: 2.5,
-                      px: 1,
-                      ...(!socCode && predictions.length > 0 ? { cursor: 'pointer', '&:hover': { boxShadow: 2 } } : {}),
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 2,
+                      flexWrap: 'wrap',
+                      mb: !socCode && predictions.length > 0 ? 1 : 0,
                     }}
-                  />
-                  {currentScore != null && !isNaN(currentScore) && (
-                    <Typography variant='body2' color='text.secondary'>
-                      Confidence: {Math.round(currentScore)}%
+                  >
+                    <Chip
+                      label={`${socCode || predictions[0]?.soc || ''}${currentTitle ? ` \u2014 ${currentTitle}` : ''}`}
+                      color={socCode ? 'primary' : 'default'}
+                      variant={socCode ? 'filled' : 'outlined'}
+                      onClick={
+                        !socCode && predictions.length > 0
+                          ? () => handleSelectSoc(predictions[0].soc, predictions[0].title)
+                          : undefined
+                      }
+                      sx={{
+                        fontWeight: 600,
+                        fontSize: '0.9rem',
+                        py: 2.5,
+                        px: 1,
+                        ...(!socCode && predictions.length > 0
+                          ? { cursor: 'pointer', '&:hover': { boxShadow: 2 } }
+                          : {}),
+                      }}
+                    />
+                  </Box>
+                  {!socCode && predictions.length > 0 && (
+                    <Typography variant='caption' color='text.secondary'>
+                      Click the classification above to select it, or use the search below to find a different one.
                     </Typography>
                   )}
-                </Box>
+                </>
               ) : (
                 <Typography
                   variant='body2'
@@ -420,11 +475,13 @@ export default function SocCodeModal({
                       runSearch(searchQuery)
                     }
                   }}
+                  inputRef={searchInputRef}
                 />
                 <Button
                   variant='contained'
                   size='small'
                   onClick={() => runSearch(searchQuery)}
+                  disabled={searching}
                 >
                   Search
                 </Button>
@@ -432,33 +489,37 @@ export default function SocCodeModal({
             )}
 
             {/* Search / Prediction Results */}
-            {predictions.length > 0 && showChangeInput && (
+            {showChangeInput && (
               <Box sx={{ mb: 3 }}>
-                <Typography variant='subtitle2' color='text.secondary' gutterBottom>
-                  Search Results
-                </Typography>
-                <List dense disablePadding>
-                  {predictions.map((pred) => (
-                    <ListItem key={pred.soc} disablePadding>
-                      <ListItemButton
-                        selected={isCurrentPrediction(pred)}
-                        onClick={() =>
-                          handleSelectSoc(pred.soc, pred.title, pred.score)
-                        }
-                        sx={{ borderRadius: 1, mb: 0.5 }}
-                      >
-                        <ListItemText
-                          primary={`${pred.soc} \u2014 ${pred.title}`}
-                          secondary={
-                            pred.score != null && !isNaN(pred.score)
-                              ? `Confidence: ${Math.round(pred.score)}%`
-                              : undefined
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                  <Typography variant='subtitle2' color='text.secondary'>
+                    Search Results
+                  </Typography>
+                  {searching && <CircularProgress size={14} />}
+                </Box>
+                {predictions.length > 0 ? (
+                  <List dense disablePadding>
+                    {predictions.map((pred) => (
+                      <ListItem key={pred.soc} disablePadding>
+                        <ListItemButton
+                          selected={isCurrentPrediction(pred)}
+                          onClick={() =>
+                            handleSelectSoc(pred.soc, pred.title)
                           }
-                        />
-                      </ListItemButton>
-                    </ListItem>
-                  ))}
-                </List>
+                          sx={{ borderRadius: 1, mb: 0.5 }}
+                        >
+                          <ListItemText
+                            primary={`${pred.soc} \u2014 ${pred.title}`}
+                          />
+                        </ListItemButton>
+                      </ListItem>
+                    ))}
+                  </List>
+                ) : !searching && searchQuery.trim() ? (
+                  <Typography variant='body2' color='text.secondary' sx={{ fontStyle: 'italic' }}>
+                    No matching classifications found.
+                  </Typography>
+                ) : null}
               </Box>
             )}
 
@@ -532,18 +593,21 @@ export default function SocCodeModal({
 
             {/* Adjacent SOCs */}
             <Box>
-              <Typography variant='subtitle2' color='text.secondary' gutterBottom>
-                Adjacent Job Classifications
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <Typography variant='subtitle2' color='text.secondary'>
+                  Adjacent Job Classifications
+                </Typography>
+                {adjacentLoading && <CircularProgress size={14} />}
+              </Box>
               {adjacentSocs.length > 0 ? (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                   {adjacentSocs.map((adj) => (
                     <Chip
                       key={adj.soc}
-                      label={`${adj.soc} \u2014 ${adj.title}${adj.score ? ` (${Math.round(adj.score)}%)` : ''}`}
+                      label={`${adj.soc} \u2014 ${adj.title}`}
                       variant='outlined'
                       onClick={() =>
-                        handleSelectSoc(adj.soc, adj.title, adj.score)
+                        handleSelectSoc(adj.soc, adj.title)
                       }
                       sx={{
                         justifyContent: 'flex-start',
@@ -557,7 +621,7 @@ export default function SocCodeModal({
                     />
                   ))}
                 </Box>
-              ) : (
+              ) : !adjacentLoading ? (
                 <Typography
                   variant='body2'
                   color='text.secondary'
@@ -565,13 +629,13 @@ export default function SocCodeModal({
                 >
                   No adjacent classifications found.
                 </Typography>
-              )}
+              ) : null}
             </Box>
           </>
         )}
       </DialogContent>
 
-      <DialogActions>
+      <DialogActions sx={{ flexShrink: 0 }}>
         <Button onClick={onClose}>Close</Button>
       </DialogActions>
     </Dialog>
