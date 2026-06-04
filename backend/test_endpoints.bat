@@ -3,7 +3,7 @@ REM test_endpoints.bat  —  Test the new O*NET/SOC endpoints (Windows)
 REM Assumes the server is running at http://localhost:8000
 REM Requires curl.exe (available on Windows 10/11 or via Git Bash)
 
-set BASE_URL=http://localhost:8000
+set BASE_URL=http://127.0.0.1:8000
 if not "%1"=="" set BASE_URL=%1
 
 echo.
