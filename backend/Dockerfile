@@ -18,7 +18,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Download the required spaCy models
 RUN python -m spacy download en_core_web_lg
-RUN python -m spacy download en_core_web_trf
+# RUN python -m spacy download en_core_web_trf
 
 # Copy the rest of the backend source code
 COPY . .
