@@ -444,6 +444,14 @@ const CredentialPreview: React.FC<CredentialPreviewProps> = ({
     const runSearch = async (names: string[]) => {
       isSearchingRef.current = true
       pendingSearchNamesRef.current = null
+      
+      // try {
+      //   const mapped = await searchSkillsApi(names)
+      //   setDetectedSkills(mapped)
+      // } catch (error: any) {
+      //   console.error('Failed to search skills:', error)
+      // } finally {
+      //   isSearchingRef.current = false
 
       try {
         // Manual UI additions keep source 'user'; everything else was LLM-extracted
