@@ -465,6 +465,8 @@ const Form = ({ onStepChange }: any) => {
                       selectedFiles={selectedFiles}
                       setSelectedFiles={setSelectedFiles}
                       handleBack={costumedHandleBackStep}
+                      setActiveSkills={setActiveSkills}
+                      setManuallyAddedSkills={setManuallyAddedSkills}
                     />
                   </Box>
                 </Slide>

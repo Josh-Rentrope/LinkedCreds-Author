@@ -53,7 +53,7 @@ export const extractRawSkillsApi = async (text: string, signal?: AbortSignal): P
     if (extractCache.has(text)) {
         return extractCache.get(text)!
     }
-
+    //console.log(text);
     try {
         const baseUrl = process.env.NEXT_PUBLIC_SKILLS_API_URL
         const res = await fetch(`${baseUrl}/extract`, {
@@ -62,8 +62,10 @@ export const extractRawSkillsApi = async (text: string, signal?: AbortSignal): P
             body: JSON.stringify({ text, top_k: 2 }),
             signal
         })
+        
         if (!res.ok) return []
         const data = await res.json()
+        
         const skills: ExtractedSkill[] = data.extracted_skills ?? []
         const lowerText = text.toLowerCase()
         const result = skills
