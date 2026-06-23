@@ -1,0 +1,62 @@
+# Dockerfile.frontend (Place in repository root)
+
+# --- Stage 1: Build ---
+FROM node:22-alpine AS builder
+
+WORKDIR /app
+
+# Copy package files first for dependency caching
+COPY package*.json ./
+
+# Install all dependencies (npm ci is preferred for deterministic CI/CD builds)
+RUN npm ci
+
+# Copy the rest of the repository code
+COPY . .
+
+# Build the Next.js application
+RUN npm run build
+
+# --- Stage 2: Production Runner ---
+FROM node:22-alpine AS runner
+
+WORKDIR /app
+
+# Declare the build arguments
+ARG NEXT_PUBLIC_SKILLS_API_URL
+ARG NEXT_PUBLIC_FIREBASE_API_KEY
+      
+ARG NEXTAUTH_URL
+ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID
+ARG NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+ARG NEXT_PUBLIC_FIREBASE_PROJECT_ID
+ARG NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+ARG NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+ARG NEXT_PUBLIC_FIREBASE_APP_ID
+
+# (Add the rest of your NEXT_PUBLIC_ variables here as ARGs)
+
+# Map them to environment variables for the build step
+ENV NEXT_PUBLIC_SKILLS_API_URL=$NEXT_PUBLIC_SKILLS_API_URL
+ENV NEXT_PUBLIC_FIREBASE_API_KEY=$NEXT_PUBLIC_FIREBASE_API_KEY
+
+ENV NEXTAUTH_URL=$NEXTAUTH_URL
+ENV NEXT_PUBLIC_GOOGLE_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_CLIENT_ID
+ENV NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=$NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+ENV NEXT_PUBLIC_FIREBASE_PROJECT_ID=$NEXT_PUBLIC_FIREBASE_PROJECT_ID
+ENV NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=$NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+ENV NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=$NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+ENV NEXT_PUBLIC_FIREBASE_APP_ID=$NEXT_PUBLIC_FIREBASE_APP_ID
+
+
+ENV NODE_ENV=production
+
+# Copy only the necessary files from the builder stage
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/public ./public
+
+EXPOSE 3000
+
+CMD ["npm", "run", "start"]
