@@ -69,11 +69,7 @@ export const extractRawSkillsApi = async (text: string, signal?: AbortSignal): P
             body: JSON.stringify({ text, top_k: 2 }),
             signal
         })
-<<<<<<< HEAD
         
-=======
-        console.log(res);
->>>>>>> 56d0bcc7 (Fixing duplicate pill logic in removed, detected skills. Working on permanently removing skills)
         if (!res.ok) return []
         const data = await res.json()
         
