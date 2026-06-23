@@ -71,6 +71,11 @@ import FileListDisplay from '../../../components/FileList'
 import LoadingOverlay from '../../../components/Loading/LoadingOverlay'
 import { GoogleDriveStorage } from '@cooperation/vc-storage'
 import { ensureProtocol, handleUrlValidation } from '../../../utils/urlValidation'
+import {
+  extractRawSkillsApi,
+  searchSkillsApi,
+  SkillMatch
+} from '../../../utils/skillsApi'
 
 export interface LinkItem {
   id: string
@@ -89,6 +94,8 @@ interface Step2Props {
   selectedFiles: any[]
   setSelectedFiles: React.Dispatch<React.SetStateAction<any[]>>
   handleBack: () => void
+  setActiveSkills?: React.Dispatch<React.SetStateAction<SkillMatch[]>>
+  setManuallyAddedSkills?: React.Dispatch<React.SetStateAction<SkillMatch[]>>
 }
 
 // Example list of skills for auto-search
@@ -108,7 +115,9 @@ export function Step2({
   setValue,
   selectedFiles,
   setSelectedFiles,
-  handleBack
+  handleBack,
+  setActiveSkills,
+  setManuallyAddedSkills
 }: Readonly<Step2Props>) {
   const { loading, setUploadImageFn } = useStepContext()
   const { storage } = useGoogleDrive()

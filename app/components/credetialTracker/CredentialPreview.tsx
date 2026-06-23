@@ -276,6 +276,9 @@ const CredentialPreview: React.FC<CredentialPreviewProps> = ({
 
         try {
           const rawNames = await extractRawSkillsApi(extractText)
+          
+          //console.log(rawNames);
+          
           setDetectedSkillNames(prev => {
             const existing = new Set(prev.map(n => n.toLowerCase()))
             const newNames = rawNames.filter(n => !existing.has(n.toLowerCase()))
@@ -324,7 +327,7 @@ const CredentialPreview: React.FC<CredentialPreviewProps> = ({
       setDetectedSkills([])
       return
     }
-
+    
     if (isSearchingRef.current) {
       pendingSearchNamesRef.current = detectedSkillNames
       return
@@ -333,6 +336,14 @@ const CredentialPreview: React.FC<CredentialPreviewProps> = ({
     const runSearch = async (names: string[]) => {
       isSearchingRef.current = true
       pendingSearchNamesRef.current = null
+      
+      // try {
+      //   const mapped = await searchSkillsApi(names)
+      //   setDetectedSkills(mapped)
+      // } catch (error: any) {
+      //   console.error('Failed to search skills:', error)
+      // } finally {
+      //   isSearchingRef.current = false
 
       try {
         // Manual UI additions keep source 'user'; everything else was LLM-extracted
@@ -355,7 +366,7 @@ const CredentialPreview: React.FC<CredentialPreviewProps> = ({
       }
     }
 
-    runSearch(detectedSkillNames)
+    //runSearch(detectedSkillNames)
   }, [detectedSkillNames])
 
   const onSkillsChangeRef = useRef(onSkillsChange)
@@ -389,6 +400,8 @@ const CredentialPreview: React.FC<CredentialPreviewProps> = ({
           frameworkMatch: []
         }
       })
+
+      
 
       // Keep manual skills + still-detected skills, add newly detected
       const allDetectedNames = fromDetection.map(s => s.name)
