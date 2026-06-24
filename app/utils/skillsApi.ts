@@ -39,7 +39,7 @@ const searchCache = new Map<string, SkillMatch>()
 export const warmupSkillsApi = async (): Promise<void> => {
     try {
         console.log(process.env);
-        const baseUrl = process.env.NEXT_PUBLIC_SKILLS_API_URL
+        const baseUrl = process.env.NEXT_PUBLIC_SKILLS_API_URL || "/api";
         await fetch(`${baseUrl}/extract`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -57,7 +57,7 @@ export const extractRawSkillsApi = async (text: string, signal?: AbortSignal): P
     //console.log(text);
     try {
         console.log(process.env.NEXT_PUBLIC_SKILLS_API_URL);
-        const baseUrl = process.env.NEXT_PUBLIC_SKILLS_API_URL
+        const baseUrl = process.env.NEXT_PUBLIC_SKILLS_API_URL || "/api";
         const res = await fetch(`${baseUrl}/extract`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -104,7 +104,7 @@ export const searchSkillsApi = async (skillNames: string[], signal?: AbortSignal
     if (uncachedNames.length > 0) {
         try {
             const payload: ExtractedSkill[] = uncachedNames.map(name => ({ name, source: 'user' }))
-            const baseUrl = process.env.NEXT_PUBLIC_SKILLS_API_URL
+            const baseUrl = process.env.NEXT_PUBLIC_SKILLS_API_URL  || "/api";
             const res = await fetch(`${baseUrl}/search`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
