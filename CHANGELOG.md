@@ -1,10 +1,10 @@
 # linkedcreds ChangeLog
 
-## 0.2.0 - TBD
+## 0.2.0 - 2026-06-24
 
 ### Changed (SkillClaim provenance + data model alignment)
 
-- Bumped `@cooperation/vc-storage` to `^1.0.48` (new SkillClaim data model:
+- Bumped `@cooperation/vc-storage` to `^1.0.49` (new SkillClaim data model:
   separate `inferredSkill`, no `narrative`, `socCode` as `string[]`).
 - `searchSkillsApi` now sends real per-name provenance instead of hardcoding
   `source: 'user'` for every result: manually added skills are labeled `user`
