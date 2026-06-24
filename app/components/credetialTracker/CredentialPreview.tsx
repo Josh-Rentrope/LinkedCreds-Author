@@ -313,6 +313,12 @@ const CredentialPreview: React.FC<CredentialPreviewProps> = ({
   const isSearchingRef = useRef(false)
   const pendingSearchNamesRef = useRef<string[] | null>(null)
 
+  // Mirror manuallyAddedSkills so runSearch can label provenance without re-triggering
+  const manualSkillsRef = useRef(manuallyAddedSkills)
+  useLayoutEffect(() => {
+    manualSkillsRef.current = manuallyAddedSkills
+  })
+
   // Step 2: detectedSkillNames changes → /search → detectedSkills (full O*NET SkillMatch[])
   // Pattern: at most 1 running /search request + 1 queued.
   // Prevents multiple concurrent pending /search API calls.
@@ -330,21 +336,26 @@ const CredentialPreview: React.FC<CredentialPreviewProps> = ({
     const runSearch = async (names: string[]) => {
       isSearchingRef.current = true
       pendingSearchNamesRef.current = null
-      
-      // try {
-      //   const mapped = await searchSkillsApi(names)
-      //   setDetectedSkills(mapped)
-      // } catch (error: any) {
-      //   console.error('Failed to search skills:', error)
-      // } finally {
-      //   isSearchingRef.current = false
 
-      //   const pending = pendingSearchNamesRef.current
-      //   if (pending) {
-      //     pendingSearchNamesRef.current = null
-      //     runSearch(pending)
-      //   }
-      // }
+      try {
+        // Manual UI additions keep source 'user'; everything else was LLM-extracted
+        const sourcesByName: Record<string, string> = {}
+        for (const manual of manualSkillsRef.current) {
+          sourcesByName[manual.name.toLowerCase()] = 'user'
+        }
+        const mapped = await searchSkillsApi(names, undefined, sourcesByName)
+        setDetectedSkills(mapped)
+      } catch (error: any) {
+        console.error('Failed to search skills:', error)
+      } finally {
+        isSearchingRef.current = false
+
+        const pending = pendingSearchNamesRef.current
+        if (pending) {
+          pendingSearchNamesRef.current = null
+          runSearch(pending)
+        }
+      }
     }
 
     //runSearch(detectedSkillNames)
