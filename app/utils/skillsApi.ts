@@ -56,7 +56,7 @@ export const extractRawSkillsApi = async (text: string, signal?: AbortSignal): P
     }
     //console.log(text);
     try {
-        console.log(process.env);
+        console.log(process.env.NEXT_PUBLIC_SKILLS_API_URL);
         const baseUrl = process.env.NEXT_PUBLIC_SKILLS_API_URL
         const res = await fetch(`${baseUrl}/extract`, {
             method: 'POST',
