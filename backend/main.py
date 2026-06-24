@@ -31,7 +31,7 @@ import adjacent_socs
 
 
 
-app = FastAPI()
+app = FastAPI(root_path="/api")
 
 # Allow front-end requests
 app.add_middleware(
