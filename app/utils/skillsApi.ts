@@ -45,6 +45,7 @@ const searchCache = new Map<string, SkillMatch>()
 
 export const warmupSkillsApi = async (): Promise<void> => {
     try {
+        console.log(process.env);
         const baseUrl = process.env.NEXT_PUBLIC_SKILLS_API_URL
         await fetch(`${baseUrl}/extract`, {
             method: 'POST',
@@ -62,6 +63,7 @@ export const extractRawSkillsApi = async (text: string, signal?: AbortSignal): P
     }
     //console.log(text);
     try {
+        console.log(process.env);
         const baseUrl = process.env.NEXT_PUBLIC_SKILLS_API_URL
         const res = await fetch(`${baseUrl}/extract`, {
             method: 'POST',
