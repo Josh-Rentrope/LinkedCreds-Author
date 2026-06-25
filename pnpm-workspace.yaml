@@ -1,8 +1,9 @@
 allowBuilds:
-  '@firebase/util': set this to true or false
-  canvas: set this to true or false
-  protobufjs: set this to true or false
-  sharp: set this to true or false
-  unrs-resolver: set this to true or false
+  '@firebase/util': false
+  canvas: false
+  protobufjs: false
+  sharp: true
+  tesseract.js: false
+  unrs-resolver: true
 minimumReleaseAgeExclude:
   - '@cooperation/vc-storage@1.0.49'

@@ -76,6 +76,7 @@ import {
   searchSkillsApi,
   SkillMatch
 } from '../../../utils/skillsApi'
+import { ocrFileItem, filesNeedingOcr, canOCR } from '../../../utils/ocrClient'
 
 export interface LinkItem {
   id: string

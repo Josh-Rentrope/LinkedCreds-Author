@@ -4,7 +4,7 @@ import ReactQuill from 'react-quill'
 import 'react-quill/dist/quill.snow.css'
 import { Box, FormLabel } from '@mui/material'
 import './TextEditor.css'
-import Quill from 'quill'
+const Quill = ReactQuill.Quill
 const Delta = Quill.import('delta')
 
 interface TextEditorProps {
