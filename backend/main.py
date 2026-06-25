@@ -1,11 +1,16 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+<<<<<<< HEAD
 from typing import List, Dict, Any, Union, Optional
 import uuid
 import sys
 import os
 
+=======
+from typing import List, Dict, Any, Union
+import uuid
+>>>>>>> d3f60f51 (fix(backend): align /extract response format with frontend + add /search mock endpoint)
 import spacy
 from spacy.matcher import PhraseMatcher
 from skillNer.skill_extractor_class import SkillExtractor
@@ -55,6 +60,7 @@ class SearchRequest(BaseModel):
     top_k: int = 2
 
 
+<<<<<<< HEAD
 class PredictSOCRequest(BaseModel):
     skills: List[str]
     top_n: int = 5
@@ -143,6 +149,8 @@ async def preload_onet_graph():
 
 
 
+=======
+>>>>>>> d3f60f51 (fix(backend): align /extract response format with frontend + add /search mock endpoint)
 # ---------------------------------------------------------------------------
 # Mock similar-skills lookup table
 # When a real O*NET / FAISS index is not available, this dictionary provides
@@ -218,19 +226,63 @@ def extract_skills(request: TextRequest):
     for s in result["results"].get("ngram_scored", []):
         skills.add(s["doc_node_value"])
 
-    extracted_skills_with_source = [
-        {
-            "name": name,
-            "source": "skillner"
-        } 
-        for name in skills
-    ]
-    
+    # Return format matching what the frontend skillsApi.ts expects
     return {
-        "extracted_skills": extracted_skills_with_source
+        "extracted_skills": [
+            {"name": name, "source": "skillner"}
+            for name in skills
+        ]
     }
 
-    #return {"skills": list(skills)}
+
+def _get_mock_alignments(skill_name: str, top_k: int = 2) -> List[Dict[str, Any]]:
+    """Return a list of mocked alignment dicts for *skill_name*.
+
+    If the skill is found in MOCK_SIMILAR_SKILLS (case‑insensitive),
+    up to *top_k* related skills are returned.  Otherwise an empty list
+    is returned so the frontend still receives a valid response.
+    """
+    key = skill_name.strip().lower()
+    similar = MOCK_SIMILAR_SKILLS.get(key, [])[:top_k]
+
+    alignments: List[Dict[str, Any]] = []
+    for i, related in enumerate(similar):
+        score = round(0.95 - i * 0.10, 2)  # 0.95, 0.85, …
+        alignments.append({
+            "type": ["Alignment"],
+            "targetFramework": "SkillNer",
+            "similarity score": score,
+            "targetCode": [],
+            "targetName": related,
+            "id": uuid.uuid5(uuid.NAMESPACE_DNS, f"{skill_name}::{related}").urn,
+        })
+    return alignments
+
+
+@app.post("/search")
+def search_skills(request: SearchRequest):
+    """Map skill names to related skills (mock implementation).
+
+    Accepts the same payload shape as the Ollama‑based backend so the
+    frontend requires zero changes.  Returns stubbed alignment entries
+    from the MOCK_SIMILAR_SKILLS dictionary (empty alignment for unknown
+    skills).
+    """
+    skills_response: List[Dict[str, Any]] = []
+
+    for skill_item in request.extracted_skills:
+        skill_name = skill_item["name"] if isinstance(skill_item, dict) else skill_item
+        skill_source = skill_item.get("source", "skillner") if isinstance(skill_item, dict) else "skillner"
+
+        alignments = _get_mock_alignments(skill_name, request.top_k)
+
+        skills_response.append({
+            "name": skill_name,
+            "source": skill_source,
+            "alignment": alignments,
+        })
+
+    return {"skill": skills_response}
 
 
 # Run the app using these commands:
