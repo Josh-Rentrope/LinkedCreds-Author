@@ -62,7 +62,7 @@ export function buildSkillClaimSkillsFromForm(data: FormData): {
       inferredSkills.push({
         id: skillId(skill.id),
         name: skill.name,
-        source: 'ollama',
+        source: skill.source || 'ollama',
         model: skill.model || DEFAULT_EXTRACTION_MODEL,
         ...(skill.frameworkMatch?.length ? { frameworkMatch: skill.frameworkMatch } : {})
       })
