@@ -474,7 +474,7 @@ const CredentialPreview: React.FC<CredentialPreviewProps> = ({
       }
     }
 
-    //runSearch(detectedSkillNames)
+    runSearch(detectedSkillNames)
   }, [detectedSkillNames])
 
   const onSkillsChangeRef = useRef(onSkillsChange)
